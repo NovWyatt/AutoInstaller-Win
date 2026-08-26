@@ -161,6 +161,13 @@ answer files to the ISO partition, compiles every `.au3`, and copies the
 applications and scripts to the SOFTWARE partition. `--dry-run` shows what it
 would do; `-i I:S` names the drives explicitly.
 
+Each run records what it placed in a hidden `.autoinstaller-deploy.txt` on each
+partition, and the next run removes anything that manifest lists which the repo
+no longer produces — a renamed folder, a deleted script. **Files you put on the
+USB yourself are never in a manifest and are never touched**, which is why this
+does not simply mirror the tree: mirroring would delete every vendor installer,
+driver pack and ISO you downloaded. `--no-prune` turns the cleanup off.
+
 Then rename `ventoy/ventoy.json.example` to `ventoy.json` and adjust it — see
 [ventoy/README.md](ventoy/README.md).
 

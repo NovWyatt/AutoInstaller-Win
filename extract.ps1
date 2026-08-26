@@ -67,6 +67,9 @@ param(
 
     [switch]$NoPrompt,
 
+    [Alias('no-prune')]
+    [switch]$NoPrune,
+
     [string]$RootDir = '',
 
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -94,6 +97,9 @@ if ($RemainingArgs -and $RemainingArgs.Count -gt 0) {
             $currentFlag = $null
         } elseif ($lower -in @('-noprompt', '--noprompt', '-no-prompt', '--no-prompt')) {
             $NoPrompt = $true
+            $currentFlag = $null
+        } elseif ($lower -in @('-noprune', '--noprune', '-no-prune', '--no-prune')) {
+            $NoPrune = $true
             $currentFlag = $null
         } elseif ($lower -in @('-i', '--i', '-input', '--input')) {
             $currentFlag = 'input'
@@ -140,6 +146,7 @@ OPTIONS:
     -v,  --version          Display tool version (v1.0.0) and author info.
     -h,  --help             Show this help screen.
     --no-prompt             Skip the 'Press Enter to exit' prompt upon completion.
+    --no-prune              Keep files left by a previous deployment that this one no longer produces.
 
 PARTITION MARKERS:
     - ISO Partition      : Identified by root marker '5b512ee8a59deb284ad0a6a035ba10b1.md5'
@@ -495,6 +502,18 @@ $successCount    = 0
 $failCount       = 0
 $taskResults     = [System.Collections.Generic.List[pscustomobject]]::new()
 
+# Every file this run places on the USB, recorded so the next run can tell the
+# difference between "this used to be ours and is gone from the repo" and "the
+# user put this here". Vendor setup binaries, driver packs, font files and
+# Windows ISOs never enter this list and are therefore never pruned.
+$script:DeployedFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$manifestName = '.autoinstaller-deploy.txt'
+
+function Register-DeployedFile {
+    param([string] $Path)
+    if ($Path) { [void] $script:DeployedFiles.Add(([System.IO.Path]::GetFullPath($Path))) }
+}
+
 function Copy-DeployDirectory {
     param(
         [string]$SourceDir,
@@ -535,6 +554,10 @@ function Copy-DeployDirectory {
             $null = New-Item -ItemType Directory -Path $DestinationDir -Force -ErrorAction SilentlyContinue
         }
         Copy-Item -Path (Join-Path $SourceDir '*') -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
+        foreach ($f in (Get-ChildItem -LiteralPath $SourceDir -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            $relative = $f.FullName.Substring($SourceDir.Length).TrimStart('\', '/')
+            Register-DeployedFile (Join-Path $DestinationDir $relative)
+        }
         $sw.Stop()
         Write-Host ("  [SUCCESS] {0} -> {1} ({2} ms)" -f $Description, $DestinationDir, $sw.ElapsedMilliseconds) -ForegroundColor Green
         Write-ExtractLog SUCCESS "Copied directory '$SourceDir' to '$DestinationDir' in $($sw.ElapsedMilliseconds) ms"
@@ -600,7 +623,9 @@ function Copy-DeployFiles {
             $null = New-Item -ItemType Directory -Path $DestinationDir -Force -ErrorAction SilentlyContinue
         }
         foreach ($file in $matchingFiles) {
-            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $DestinationDir $file.Name) -Force -ErrorAction Stop
+            $target = Join-Path $DestinationDir $file.Name
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force -ErrorAction Stop
+            Register-DeployedFile $target
         }
         $sw.Stop()
         Write-Host ("  [SUCCESS] {0} ({1} file(s)) -> {2} ({3} ms)" -f $Description, $matchingFiles.Count, $DestinationDir, $sw.ElapsedMilliseconds) -ForegroundColor Green
@@ -646,6 +671,7 @@ if ($DryRun) {
         if (-not (Test-Path -LiteralPath $dstVentoyJson)) {
             try {
                 Copy-Item -LiteralPath $dstExampleJson -Destination $dstVentoyJson -Force -ErrorAction Stop
+                Register-DeployedFile $dstVentoyJson
                 Write-Host ("  [SUCCESS] Renamed ventoy.json.example -> ventoy.json in {0}" -f $ventoyDst) -ForegroundColor Green
                 Write-ExtractLog SUCCESS "Initialized 'ventoy.json' from 'ventoy.json.example' in '$ventoyDst'."
             } catch {
@@ -765,7 +791,9 @@ if ($rootFiles.Count -gt 0) {
     } else {
         try {
             foreach ($rf in $rootFiles) {
-                Copy-Item -LiteralPath $rf.FullName -Destination (Join-Path $softwareRoot $rf.Name) -Force -ErrorAction Stop
+                $target = Join-Path $softwareRoot $rf.Name
+                Copy-Item -LiteralPath $rf.FullName -Destination $target -Force -ErrorAction Stop
+                Register-DeployedFile $target
             }
             $rootFilesSw.Stop()
             Write-Host ("  [SUCCESS] Root Scripts & Binaries ({0} file(s)) -> {1}\ ({2} ms)" -f $rootFiles.Count, $softwareRoot, $rootFilesSw.ElapsedMilliseconds) -ForegroundColor Green
@@ -793,7 +821,105 @@ if ($rootFiles.Count -gt 0) {
 }
 
 # ------------------------------------------------------------------------------
-# 10. Summary Table & Vendor Download Reminder
+# 10. Prune files left by a previous deployment
+# ------------------------------------------------------------------------------
+# Copy-Item overwrites but never removes, so anything this project stopped
+# shipping stays on the USB forever -- a renamed theme folder, a deleted script,
+# an answer file that no longer exists. Mirroring the tree would fix that and
+# would also delete every vendor setup binary, driver pack and font the user put
+# there by hand, none of which live in the repository.
+#
+# So instead each run records exactly what it placed, and the next run removes
+# only what the *previous* run placed and this one did not. A file the user
+# supplied was never in a manifest and can never be selected for deletion.
+
+function Invoke-StalePrune {
+    param([string] $PartitionRoot, [string] $Label)
+
+    $manifestPath = Join-Path "$PartitionRoot\" $manifestName
+
+    $previous = @()
+    if (Test-Path -LiteralPath $manifestPath) {
+        $previous = @(Get-Content -LiteralPath $manifestPath -Encoding UTF8 -ErrorAction SilentlyContinue |
+                      Where-Object { $_ -and -not $_.StartsWith('#') })
+    }
+
+    $rootFull = [System.IO.Path]::GetFullPath("$PartitionRoot\")
+    $stale = @($previous | Where-Object {
+        $_ -and
+        -not $script:DeployedFiles.Contains($_) -and
+        $_.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) -and
+        (Test-Path -LiteralPath $_ -PathType Leaf)
+    })
+
+    if ($stale.Count -gt 0) {
+        foreach ($path in $stale) {
+            if ($DryRun) {
+                Write-Host ("  [DRY-RUN] Prune stale: {0}" -f $path) -ForegroundColor Cyan
+                Write-ExtractLog DRY-RUN "Would remove stale file '$path' on $Label"
+            } else {
+                try {
+                    Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+                    Write-Host ("  [PRUNED]  {0}" -f $path) -ForegroundColor Yellow
+                    Write-ExtractLog INFO "Removed stale file '$path' on $Label"
+                } catch {
+                    Write-ExtractLog WARN "Could not remove stale file '$path': $($_.Exception.Message)"
+                }
+            }
+        }
+
+        # Directories the pruning emptied are ours too; deepest first.
+        if (-not $DryRun) {
+            $dirs = $stale | ForEach-Object { Split-Path -Parent $_ } | Sort-Object -Unique |
+                    Sort-Object -Property { $_.Length } -Descending
+            foreach ($dir in $dirs) {
+                while ($dir -and $dir.StartsWith($rootFull.TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase) -and
+                       $dir.TrimEnd('\') -ne $rootFull.TrimEnd('\') -and
+                       (Test-Path -LiteralPath $dir) -and
+                       -not (Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) {
+                    Remove-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue
+                    Write-ExtractLog INFO "Removed emptied directory '$dir' on $Label"
+                    $dir = Split-Path -Parent $dir
+                }
+            }
+        }
+    }
+
+    Write-Host ("  [{0}] {1}: {2} file(s) deployed, {3} stale removed" -f `
+        $(if ($DryRun) { 'DRY-RUN' } else { 'PRUNE' }), $Label,
+        @($script:DeployedFiles | Where-Object { $_.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) }).Count,
+        $stale.Count) -ForegroundColor Gray
+
+    # Record this run for the next one.
+    if (-not $DryRun) {
+        $lines = @(
+            "# AutoInstaller-Win deployment manifest -- generated by extract.ps1",
+            "# Files listed here were placed by the last deployment and may be removed",
+            "# by the next one. Do not add anything by hand.",
+            "# $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        ) + @($script:DeployedFiles |
+              Where-Object { $_.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) } |
+              Sort-Object)
+        try {
+            Set-Content -LiteralPath $manifestPath -Value $lines -Encoding UTF8 -ErrorAction Stop
+            (Get-Item -LiteralPath $manifestPath -Force).Attributes = 'Hidden'
+        } catch {
+            Write-ExtractLog WARN "Could not write the deployment manifest to '$manifestPath': $($_.Exception.Message)"
+        }
+    }
+}
+
+Write-Host "`n[CLEANUP] Removing files left by previous deployments..." -ForegroundColor Cyan
+if ($NoPrune) {
+    Write-Host "  [SKIP]    --no-prune given; stale files are left in place." -ForegroundColor Yellow
+    Write-ExtractLog INFO 'Pruning skipped (--no-prune).'
+} else {
+    Invoke-StalePrune -PartitionRoot $isoRoot      -Label 'ISO partition'
+    Invoke-StalePrune -PartitionRoot $softwareRoot -Label 'SOFTWARE partition'
+}
+
+# ------------------------------------------------------------------------------
+# 11. Summary Table & Vendor Download Reminder
 # ------------------------------------------------------------------------------
 Write-Host "`n======================================================================" -ForegroundColor Cyan
 Write-Host " Deployment Summary" -ForegroundColor Cyan

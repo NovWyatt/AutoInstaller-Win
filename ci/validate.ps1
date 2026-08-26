@@ -19,7 +19,8 @@
       5. Every #include path resolves on disk
       6. The committed Unattend answer files still match their template
       7. The committed GRUB theme files still match their template
-      8. No tracked file is excluded by the .gitignore rules
+      8. extract.ps1 prunes only what it deployed, never the user's own files
+      9. No tracked file is excluded by the .gitignore rules
 
     AutoIt cannot be installed on a CI runner, so check 4 stands in for the
     compiler. It is not a parser: it verifies block balance, quote balance, and
@@ -293,7 +294,19 @@ if (Test-Path -LiteralPath $themeBuilder) {
     Write-Result 'build-theme.ps1' $false 'not found'
 }
 
-# ---- 8. .gitignore does not exclude tracked files -----------------------
+# ---- 8. extract.ps1 stale-file pruning ----------------------------------
+Start-Section 'extract.ps1 pruning keeps user-supplied files'
+$pruneTest = Join-Path (Get-Location) 'ci\Test-ExtractPrune.ps1'
+if (Test-Path -LiteralPath $pruneTest) {
+    $output = & $pruneTest 2>&1
+    $ok = ($LASTEXITCODE -eq 0)
+    if (-not $ok) { $output | ForEach-Object { Write-Host "    $_" -ForegroundColor Red } }
+    Write-Result 'Test-ExtractPrune.ps1' $ok $(if ($ok) { '' } else { 'pruning would remove files it does not own' })
+} else {
+    Write-Result 'Test-ExtractPrune.ps1' $false 'not found'
+}
+
+# ---- 9. .gitignore does not exclude tracked files -----------------------
 Start-Section '.gitignore keeps every tracked file'
 $tracked = @(& git ls-files)
 if ($LASTEXITCODE -ne 0) {
