@@ -216,6 +216,15 @@ EndFunc
 ;  Small helpers
 ; ──────────────────────────────────────────────────────────────────────────────
 
+; Directory this run writes into: logs, the report, staged wallpapers, the
+; installer scratch files. Derived from the configured log path so moving one
+; INI setting moves all of it.
+Func _WorkDir()
+    Local $sDir = _ParentDir($g_sLogPath)
+    If $sDir = "" Then $sDir = "C:\Auto-installer"
+    Return $sDir
+EndFunc
+
 ; Directory part of a full file path, without the trailing separator.
 Func _ParentDir($sPath)
     Local $iSlash = StringInStr($sPath, "\", 0, -1)

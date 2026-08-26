@@ -1,10 +1,17 @@
 [CmdletBinding()]
 param(
     [string] $LogDirectory = 'C:\Auto-installer',
-    [string] $OutputPath = 'C:\Auto-installer\report.md'
+    [string] $OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The report belongs beside the logs it summarises, so it follows -LogDirectory
+# unless the caller names somewhere else outright.
+# [IO.Path]::Combine rather than Join-Path: Join-Path resolves the drive and
+# throws outright if it is not mounted, which turns a misconfigured log_path
+# into a confusing error before anything can be reported about it.
+if (-not $OutputPath) { $OutputPath = [System.IO.Path]::Combine($LogDirectory, 'report.md') }
 
 function Get-LogLines {
     param([string] $Path)

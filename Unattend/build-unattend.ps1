@@ -18,6 +18,12 @@
     Regenerate after editing the template or a fragment. The generated files stay
     committed, so deploying the USB never requires running this script.
 
+.PARAMETER WorkDirectory
+    Folder the embedded setup scripts log into. Must match the directory of
+    log_path in install-apps.ini, because report.exe looks for setup-scripts.log
+    beside the other logs. Baked into the generated files, so change it here and
+    regenerate.
+
 .PARAMETER Check
     Generate into memory and compare against the files on disk instead of
     writing. Exits 1 if any file is out of date. Used by CI to prove the
@@ -33,7 +39,9 @@
 #>
 [CmdletBinding()]
 param(
-    [switch] $Check
+    [switch] $Check,
+
+    [string] $WorkDirectory = 'C:\Auto-installer'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,6 +123,7 @@ function Build-Answer {
     $text = $text.Replace('{{COMPUTER_NAME}}', $Layout.ComputerName)
     $text = $text.Replace('{{ACCOUNT_NAME}}', $Layout.AccountName)
     $text = $text.Replace('{{DISPLAY_NAME}}', $Layout.DisplayName)
+    $text = $text.Replace('{{WORK_DIR}}', $script:WorkDir)
     $text = $text.Replace('{{AUTOINSTALLER_MODE}}', $Scope.Mode)
     $text = $text.Replace('{{AUTOINSTALLER_DESCRIPTION}}', $Scope.Description)
 
@@ -133,6 +142,7 @@ if (-not (Test-Path -LiteralPath $templatePath)) {
     throw "Template not found: $templatePath"
 }
 $template = Read-TextFile $templatePath
+$script:WorkDir = $WorkDirectory.TrimEnd('\')
 
 $written = 0
 $stale = [System.Collections.Generic.List[string]]::new()

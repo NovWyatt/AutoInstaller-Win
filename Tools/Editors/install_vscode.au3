@@ -17,7 +17,7 @@ If _IsVSCodeInstalled() Then
     Exit 10
 EndIf
 
-Local $sInnoLog = "C:\Auto-installer\install_vscode_inno.log"
+Local $sInnoLog = _WorkDir() & "\install_vscode_inno.log"
 Local $iExitCode = _RunSetupFlags('/VERYSILENT /NORESTART' & _
     ' /MERGETASKS="!runcode,addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath"' & _
     ' /LOG="' & $sInnoLog & '"')

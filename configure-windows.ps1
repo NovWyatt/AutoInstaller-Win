@@ -867,7 +867,7 @@ $wpPath = 'C:\Windows\Web\Wallpaper\Windows\img0.jpg'
 if ($desktopWp.ToLowerInvariant() -ne 'default') {
     if ($desktopWp.StartsWith('http://') -or $desktopWp.StartsWith('https://')) {
         try {
-            $destWp = 'C:\Auto-installer\wallpaper.jpg'
+            $destWp = Join-Path (Split-Path -Parent $script:LogFile) 'wallpaper.jpg'
             Invoke-WebRequest -Uri $desktopWp -OutFile $destWp -UseBasicParsing -TimeoutSec 30
             $wpPath = $destWp
             Write-Log "INFO: [24] Downloaded desktop wallpaper from $desktopWp."
@@ -921,7 +921,7 @@ if ($lockscreenWp.ToLowerInvariant() -ne 'default') {
     $lockPath = $null
     if ($lockscreenWp.StartsWith('http://') -or $lockscreenWp.StartsWith('https://')) {
         try {
-            $destLock = 'C:\Auto-installer\lockscreen.jpg'
+            $destLock = Join-Path (Split-Path -Parent $script:LogFile) 'lockscreen.jpg'
             Invoke-WebRequest -Uri $lockscreenWp -OutFile $destLock -UseBasicParsing -TimeoutSec 30
             $lockPath = $destLock
         } catch {

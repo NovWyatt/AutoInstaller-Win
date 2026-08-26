@@ -111,7 +111,8 @@ Func _RunDrivers()
     EndIf
 
     _ConsolePrint("INFO", "Launching driver installer (Windows Update -- system may restart)...")
-    Local $iExitCode = ShellExecuteWait($sDriverLauncher, "-ReportAfterCompletion", $g_sRoot, "open", @SW_HIDE)
+    Local $sDriverArgs = '-ReportAfterCompletion -LogDirectory "' & _WorkDir() & '"'
+    Local $iExitCode = ShellExecuteWait($sDriverLauncher, $sDriverArgs, $g_sRoot, "open", @SW_HIDE)
     Local $iLaunchError = @error
     If $iLaunchError Then
         _WriteLog("ERROR", "Could not start install-drivers.exe. AutoIt error=" & $iLaunchError)
@@ -294,13 +295,14 @@ Func _RunWindowsConfig()
     EndIf
 
     _ConsolePrint("INFO", "Applying post-installation Windows settings...")
-    Local $iExitCode = ShellExecuteWait($sConfigLauncher, "", $g_sRoot, "open", @SW_HIDE)
+    Local $sConfigLog = _WorkDir() & "\configure-windows.log"
+    Local $iExitCode = ShellExecuteWait($sConfigLauncher, '"' & $sConfigLog & '"', $g_sRoot, "open", @SW_HIDE)
     If @error Or $iExitCode <> 0 Then
         _WriteLog("ERROR", "configure-windows.exe failed. exit_code=" & $iExitCode & "; autoit_error=" & @error)
         _ConsolePrint("ERROR", "Windows configuration failed (exit=" & $iExitCode & ").")
     Else
         _WriteLog("INFO", "Windows configuration completed successfully.")
-        _ConsolePrint("OK", "Windows settings applied. Log: C:\Auto-installer\configure-windows.log")
+        _ConsolePrint("OK", "Windows settings applied. Log: " & $sConfigLog)
     EndIf
 EndFunc
 
@@ -314,13 +316,14 @@ Func _RunReport()
     EndIf
 
     _ConsolePrint("INFO", "Generating installation report...")
-    Local $iExitCode = ShellExecuteWait($sReportLauncher, "", $g_sRoot, "open", @SW_HIDE)
+    Local $sReportArgs = '-LogDirectory "' & _WorkDir() & '"'
+    Local $iExitCode = ShellExecuteWait($sReportLauncher, $sReportArgs, $g_sRoot, "open", @SW_HIDE)
     If @error Or $iExitCode <> 0 Then
         _WriteLog("ERROR", "Report launcher failed. exit_code=" & $iExitCode & "; autoit_error=" & @error)
         _ConsolePrint("ERROR", "Report generation failed (exit=" & $iExitCode & ").")
     Else
         _WriteLog("INFO", "Report generation completed.")
-        _ConsolePrint("OK", "Report saved to C:\Auto-installer\report.md")
+        _ConsolePrint("OK", "Report saved to " & _WorkDir() & "\report.md")
     EndIf
 EndFunc
 
@@ -575,6 +578,14 @@ Func _WriteLog($sLevel, $sMessage)
     If $hLog = -1 Then Return
     FileWriteLine($hLog, "[" & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & " " & @HOUR & ":" & @MIN & ":" & @SEC & "] [" & $sLevel & "] " & $sMessage)
     FileClose($hLog)
+EndFunc
+
+; Same idea as _WorkDir() in _installer_common.au3: everything this run writes
+; lives beside the log file, so log_path in install-apps.ini moves all of it.
+Func _WorkDir()
+    Local $iSlash = StringInStr($g_sLogPath, "\", 0, -1)
+    If $iSlash <= 1 Then Return "C:\Auto-installer"
+    Return StringLeft($g_sLogPath, $iSlash - 1)
 EndFunc
 
 Func _ResolveTargetPath($sRelativePath)

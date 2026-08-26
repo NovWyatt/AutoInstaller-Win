@@ -6,6 +6,13 @@ Local $sScriptPath = @ScriptDir & "\report.ps1"
 Local $sPowerShell = @SystemDir & "\WindowsPowerShell\v1.0\powershell.exe"
 If Not FileExists($sScriptPath) Or Not FileExists($sPowerShell) Then Exit 20
 
-Local $iExitCode = RunWait('"' & $sPowerShell & '" -NoProfile -ExecutionPolicy Bypass -File "' & $sScriptPath & '"', @ScriptDir, @SW_HIDE)
+; Forward whatever install-apps.exe passed (-LogDirectory), so the report is
+; written wherever install-apps.ini put the logs.
+Local $sArguments = '-NoProfile -ExecutionPolicy Bypass -File "' & $sScriptPath & '"'
+For $i = 1 To $CmdLine[0]
+    $sArguments &= ' "' & StringReplace($CmdLine[$i], '"', '\"') & '"'
+Next
+
+Local $iExitCode = RunWait('"' & $sPowerShell & '" ' & $sArguments, @ScriptDir, @SW_HIDE)
 If @error Then Exit 21
 Exit $iExitCode

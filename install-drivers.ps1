@@ -6,12 +6,16 @@ param(
     [ValidateRange(1, 10)]
     [int] $Iteration = 1,
 
-    [switch] $ReportAfterCompletion
+    [switch] $ReportAfterCompletion,
+
+    # Where this run writes. install-apps.exe passes the directory it derived
+    # from log_path in install-apps.ini; the default only covers a manual run.
+    [string] $LogDirectory = 'C:\Auto-installer'
 )
 
 $ErrorActionPreference = 'Stop'
 $markerFile = 'aea541d7f9574587656dc5125116e548.md5'
-$logDirectory = 'C:\Auto-installer'
+$logDirectory = $LogDirectory
 $logPath = Join-Path $logDirectory 'install-drivers.log'
 $taskName = 'AutoInstaller-Drivers'
 
@@ -108,7 +112,7 @@ function Find-SdioExecutable {
 function Invoke-SdioDriverInstallation {
     param(
         [string] $SdioPath,
-        [string] $LogDir = 'C:\Auto-installer\sdio_logs'
+        [string] $LogDir = (Join-Path $logDirectory 'sdio_logs')
     )
 
     New-Item -ItemType Directory -Path $LogDir -Force -ErrorAction SilentlyContinue | Out-Null
@@ -247,7 +251,8 @@ function Register-DriverResumeTask {
     $arguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $resumePath),
         '-MaxIteration', $MaxIteration,
-        '-Iteration', ($Iteration + 1)
+        '-Iteration', ($Iteration + 1),
+        '-LogDirectory', ('"{0}"' -f $logDirectory)
     )
     if ($ReportAfterCompletion) { $arguments += '-ReportAfterCompletion' }
 

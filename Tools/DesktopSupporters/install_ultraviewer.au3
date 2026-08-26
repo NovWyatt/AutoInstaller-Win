@@ -19,7 +19,7 @@ If _IsUltraViewerInstalled() Then
     Exit 10
 EndIf
 
-Local $sInnoLog = "C:\Auto-installer\install_ultraviewer_inno.log"
+Local $sInnoLog = _WorkDir() & "\install_ultraviewer_inno.log"
 Local $iExitCode = _RunSetupFlags('/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /LOG="' & $sInnoLog & '"')
 If @error Then Exit 21
 _LogInnoFile($sInnoLog, "[UltraViewer]")

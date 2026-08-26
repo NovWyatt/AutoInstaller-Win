@@ -14,6 +14,11 @@ Global $g_sLogFile  = "C:\Auto-installer\configure-windows.log"
 Local $sIniLog = _ReadIniValue($g_sIniFile, "log_path")
 If $sIniLog <> "" Then $g_sLogFile = $sIniLog
 
+; $CmdLine[1] wins over the INI. install-apps.exe passes the directory it took
+; from install-apps.ini, so a single setting governs the whole run and
+; report.exe finds every log in the same place.
+If $CmdLine[0] >= 1 And $CmdLine[1] <> "" Then $g_sLogFile = $CmdLine[1]
+
 _Log("INFO: Starting Windows post-installation configuration.")
 
 If Not FileExists($g_sPsScript) Then
@@ -63,7 +68,8 @@ Func _ReadIniValue($sPath, $sKey)
 EndFunc
 
 Func _Log($sMsg)
-    DirCreate("C:\Auto-installer")
+    Local $iSlash = StringInStr($g_sLogFile, "\", 0, -1)
+    If $iSlash > 1 Then DirCreate(StringLeft($g_sLogFile, $iSlash - 1))
     Local $hLog = FileOpen($g_sLogFile, 1 + 256)
     If $hLog <> -1 Then
         FileWriteLine($hLog, "[" & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & " " & @HOUR & ":" & @MIN & ":" & @SEC & "] [WinConfig] " & $sMsg)

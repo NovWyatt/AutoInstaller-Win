@@ -19,7 +19,7 @@ If _IsMPCInstalled() Then
     Exit 10
 EndIf
 
-Local $sInnoLog = "C:\Auto-installer\install_mpc_inno.log"
+Local $sInnoLog = _WorkDir() & "\install_mpc_inno.log"
 Local $iExitCode = _RunSetupFlags('/VERYSILENT /NORESTART /TASKS="associate" /LOG="' & $sInnoLog & '"')
 If @error Then Exit 21
 _LogInnoFile($sInnoLog, "[MPC]")
