@@ -302,6 +302,9 @@ if (-not [string]::IsNullOrWhiteSpace($IconPath)) {
 # ------------------------------------------------------------------------------
 $compilationTasks = @()
 $masterPatterns   = @('install-apps.au3', 'auto-installer.au3')
+# Include-only libraries are named with a leading underscore. They have no entry
+# point, so compiling one produces a useless .exe -- and, under -a, a failure.
+$libraryPrefix    = '_'
 
 # Helper to normalize paths for comparison
 function Normalize-PathKey {
@@ -377,6 +380,12 @@ if ($InputPaths -and $InputPaths.Count -gt 0) {
         # Check explicit exclusion
         if ($excludeSet.ContainsKey($normFull) -or $excludeSet.ContainsKey($leafName)) {
             Write-Host "  [EXCLUDED] $($file.FullName)" -ForegroundColor DarkGray
+            continue
+        }
+
+        # Skip include-only libraries (e.g. _installer_common.au3)
+        if ($leafName.StartsWith($libraryPrefix)) {
+            Write-Host "  [SKIP LIB] $($file.FullName)" -ForegroundColor DarkGray
             continue
         }
 

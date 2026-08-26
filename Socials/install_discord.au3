@@ -1,57 +1,41 @@
 ﻿#RequireAdmin
 #AutoIt3Wrapper_UseX64=y
 #NoTrayIcon
-#include <AutoItConstants.au3>
+#include "..\_installer_common.au3"
 
 ; Discord installer.
-; $CmdLine[1] = setup filename (e.g. "discord.exe")
-; $CmdLine[2] = desktop shortcut flag ("true"/"false")
 ;
-; Discord's installer is a stub that self-extracts and installs per-user to
-; %LocalAppData%\Discord. It does not support true silent installation but
-; accepts /S (NSIS-style) to suppress most UI.
+; Discord's setup is a stub that self-extracts and installs per-user into
+; %LocalAppData%\Discord. It has no true silent mode but accepts the NSIS-style
+; /S to suppress most of the UI, then hands off to its Squirrel updater.
+; Argument and exit-code contract: _installer_common.au3.
 
-Global $g_sSetupFilename = "discord.exe"
-If $CmdLine[0] >= 1 Then $g_sSetupFilename = $CmdLine[1]
-Global Const $g_sSetupPath = @ScriptDir & "\" & $g_sSetupFilename
+Global Const $g_sDiscordDir = @LocalAppDataDir & "\Discord"
 
-Global $g_bShortcut = False
-Global $g_sLogPath = "C:\Auto-installer\install-apps.log"
-If $CmdLine[0] >= 4 Then $g_sLogPath = $CmdLine[4]
-If $CmdLine[0] >= 2 And StringLower($CmdLine[2]) = "true" Then $g_bShortcut = True
-
-If Not FileExists($g_sSetupPath) Then 
-    _Log("ERROR: Setup file not found: " & $g_sSetupPath)
-    Exit 20
-EndIf
+_InitInstaller("discord.exe", "Discord")
+_RequireSetup()
 
 _Log("INFO: Checking if Discord is already installed...")
 If _IsDiscordInstalled() Then
     _Log("INFO: Discord is already installed. Creating shortcut and exiting with code 10.")
-    _CreateDesktopShortcut()
+    _CreateShortcut()
     Exit 10
 EndIf
 
-_Log("INFO: Starting installation of Discord: " & $g_sSetupPath)
-; Discord installs to %LOCALAPPDATA%; run as the current user (no /RunAs)
-Local $iExitCode = RunWait('"' & $g_sSetupPath & '" /S', @ScriptDir, @SW_HIDE)
-_Log("INFO: Installer stub finished with exit code: " & $iExitCode)
-If @error Then 
-    _Log("ERROR: RunWait failed with AutoIt error: " & @error)
-    Exit 21
-EndIf
+; Discord installs into %LOCALAPPDATA%, so it runs as the current user (no /RunAs)
+Local $iExitCode = _RunSetupFlags("/S")
+If @error Then Exit 21
+
 _Log("INFO: Waiting for Squirrel updater (Update.exe) to finish...")
-; Squirrel takes a moment to spawn. Ensure we wait for it to start.
 ProcessWait("Update.exe", 30)
 
-; Now wait for it to exit completely so it finishes dropping its shortcuts.
+; Let it exit on its own so it finishes dropping its shortcuts.
 Local $hTimer = TimerInit()
 While ProcessExists("Update.exe") And TimerDiff($hTimer) < 120000
     Sleep(1000)
 WEnd
 
 _Log("INFO: Terminating any launched Discord processes...")
-; Kill Discord, DiscordSystemHelper, and any leftover Update.exe
 Local $aProcs = ["Discord.exe", "DiscordSystemHelper.exe", "Update.exe"]
 For $i = 1 To 10
     Local $bAnyAlive = False
@@ -69,46 +53,29 @@ Next
 _Log("INFO: Validating installation...")
 If _IsDiscordInstalled() Then
     _Log("INFO: Discord installation confirmed. Creating shortcut and exiting with code 0.")
-    _CreateDesktopShortcut()
+    _CreateShortcut()
     Exit 0
 EndIf
-
 _Log("ERROR: Discord installation validation failed.")
 Exit 22
 
 Func _IsDiscordInstalled()
-    ; Discord uses Squirrel; the main executable is usually Update.exe in the root
-    Return FileExists(@LocalAppDataDir & "\Discord\Update.exe")
+    ; Discord uses Squirrel; Update.exe in the root is the real entry point
+    Return FileExists($g_sDiscordDir & "\Update.exe")
 EndFunc
 
-Func _WaitForDiscord($iTimeoutSeconds)
-    Local $hTimer = TimerInit()
-    While TimerDiff($hTimer) < $iTimeoutSeconds * 1000
-        If _IsDiscordInstalled() Then Return True
-        Sleep(2000)
-    WEnd
-    Return False
-EndFunc
-
-Func _CreateDesktopShortcut()
-    ; Remove shortcuts Discord's own installer may have placed
-    Local $sUserDesktop   = @UserProfileDir & "\Desktop\Discord.lnk"
-    Local $sPublicDesktop = "C:\Users\Public\Desktop\Discord.lnk"
-    If FileExists($sUserDesktop)   Then FileDelete($sUserDesktop)
-    If FileExists($sPublicDesktop) Then FileDelete($sPublicDesktop)
+Func _CreateShortcut()
+    ; Drop whatever Discord's own installer scattered around first, so a stale
+    ; link never shadows the one below. This runs regardless of the flag.
+    _DeleteUserShortcut("Discord")
+    Local $sPublicLink = _PublicDesktopDir() & "\Discord.lnk"
+    If FileExists($sPublicLink) Then FileDelete($sPublicLink)
 
     If Not $g_bShortcut Then Return
-    Local $sTarget = @LocalAppDataDir & "\Discord\Update.exe"
+    Local $sTarget = $g_sDiscordDir & "\Update.exe"
     If Not FileExists($sTarget) Then Return
-    _Log("INFO: Creating Discord shortcut on Public Desktop.")
-    FileCreateShortcut($sTarget, $sPublicDesktop, @LocalAppDataDir & "\Discord", "--processStart Discord.exe", "Discord", @LocalAppDataDir & "\Discord\app.ico", "", 0, @SW_SHOW)
-EndFunc
 
-Func _Log($sMsg)
-    Local $sLogPath = $g_sLogPath
-    Local $hLog = FileOpen($sLogPath, 1 + 256) ; FO_APPEND (1) + FO_UTF8_NOBOM (256)
-    If $hLog <> -1 Then
-        FileWriteLine($hLog, "[" & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & " " & @HOUR & ":" & @MIN & ":" & @SEC & "] [Discord] " & $sMsg)
-        FileClose($hLog)
-    EndIf
+    _Log("INFO: Creating Discord shortcut on Public Desktop.")
+    FileCreateShortcut($sTarget, $sPublicLink, $g_sDiscordDir, "--processStart Discord.exe", _
+        "Discord", $g_sDiscordDir & "\app.ico", "", 0, @SW_SHOW)
 EndFunc

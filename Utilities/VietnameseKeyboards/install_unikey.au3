@@ -1,106 +1,95 @@
 ﻿#RequireAdmin
 #AutoIt3Wrapper_UseX64=y
 #NoTrayIcon
-#include <AutoItConstants.au3>
+#include "..\..\_installer_common.au3"
 
-; UniKey Vietnamese keyboard input method installer.
-; $CmdLine[1] = setup filename (e.g. "unikey-4.6RC2.exe")
-; $CmdLine[2] = desktop shortcut flag ("true"/"false")
+; UniKey Vietnamese input method.
 ;
-; UniKey is a portable application -- there is no installer.
-; Installation steps (per user comment):
-;   1. Create C:\Program Files\UniKey\
-;   2. Copy the exe from @ScriptDir into that directory
-;   3. Register a run-at-startup entry so UniKey loads automatically
+; UniKey is portable -- there is no setup program. Installing means:
+;   1. create %ProgramFiles%\UniKey
+;   2. copy the executable there
+;   3. import unikey.reg (with MacroPath rewritten for this user)
+;   4. register it to start with Windows
+; Argument and exit-code contract: _installer_common.au3.
 
-Global $g_sSetupFilename = "unikey.exe"
-If $CmdLine[0] >= 1 Then $g_sSetupFilename = $CmdLine[1]
-Global Const $g_sSetupPath = @ScriptDir & "\" & $g_sSetupFilename
+_InitInstaller("unikey.exe")
 
-Global Const $g_sInstallDir  = @ProgramFilesDir & "\UniKey"
-Global Const $g_sInstallExe  = $g_sInstallDir & "\" & ($CmdLine[0] >= 1 ? $CmdLine[1] : "unikey.exe")
+Global Const $g_sInstallDir = @ProgramFilesDir & "\UniKey"
+Global $g_sInstallExe = $g_sInstallDir & "\" & $g_sSetupFilename
 
-Global $g_bShortcut = False
-Global $g_sLogPath = "C:\Auto-installer\install-apps.log"
-If $CmdLine[0] >= 4 Then $g_sLogPath = $CmdLine[4]
-If $CmdLine[0] >= 2 And StringLower($CmdLine[2]) = "true" Then $g_bShortcut = True
-
-If Not FileExists($g_sSetupPath) Then
-    _Log("ERROR: Setup file not found: " & $g_sSetupPath)
-    Exit 20
-EndIf
+_RequireSetup()
 
 _Log("INFO: Checking if app is already installed...")
 If _IsUniKeyInstalled() Then
     _Log("INFO: App is already installed. Exiting with code 10.")
-    _CreateDesktopShortcut()
+    _CreateShortcut()
     Exit 10
 EndIf
 
-; Create target directory and copy the portable exe
-If Not DirCreate($g_sInstallDir) Then Exit 21
-If Not FileCopy($g_sSetupPath, $g_sInstallExe, 1) Then Exit 22
+If Not DirCreate($g_sInstallDir) Then
+    _Log("ERROR: Could not create install directory: " & $g_sInstallDir)
+    Exit 21
+EndIf
+If Not FileCopy($g_sSetupPath, $g_sInstallExe, 1) Then
+    _Log("ERROR: Could not copy UniKey to " & $g_sInstallExe)
+    Exit 22
+EndIf
 
-_Log("INFO: Running Unikey to initialize defaults...")
+_Log("INFO: Running UniKey once to initialise its defaults...")
 Run('"' & $g_sInstallExe & '"', $g_sInstallDir, @SW_HIDE)
 Sleep(2000)
 
-_Log("INFO: Terminating Unikey...")
+_Log("INFO: Terminating UniKey...")
 Local $sExeName = StringTrimLeft($g_sInstallExe, StringInStr($g_sInstallExe, "\", 0, -1))
 While ProcessExists($sExeName)
     ProcessClose($sExeName)
     Sleep(500)
 WEnd
 
-_Log("INFO: Patching and importing unikey.reg settings...")
-Local $sRegFile = @ScriptDir & "\unikey.reg"
-If FileExists($sRegFile) Then
-    ; Read the UTF-16LE registry file
-    Local $sRegContent = FileRead($sRegFile)
-    
-    ; Update the MacroPath to point to %APPDATA%\Unikey\macro.txt
-    Local $sMacroPath = @AppDataDir & "\Unikey\macro.txt"
-    Local $sEscapedMacro = StringReplace($sMacroPath, "\", "\\")
-    $sRegContent = StringRegExpReplace($sRegContent, '(?m)^"MacroPath"=.*$', '"MacroPath"="' & $sEscapedMacro & '"')
-    
-    ; Write patched content to a temp file (32 + 2 = UTF-16LE with BOM + Overwrite)
-    Local $sTempReg = @TempDir & "\unikey_patched.reg"
-    Local $hWrite = FileOpen($sTempReg, 32 + 2)
-    FileWrite($hWrite, $sRegContent)
-    FileClose($hWrite)
-    
-    RunWait('reg.exe import "' & $sTempReg & '"', "", @SW_HIDE)
-    FileDelete($sTempReg)
-EndIf
+_ImportSettings()
 
-; Set "Start with Windows" explicitly in the Run key
+; Start with Windows. configure-windows.ps1 keeps this entry in its startup allow-list.
 RegWrite("HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run", "UniKeyNT", "REG_SZ", '"' & $g_sInstallExe & '"')
 
-_Log("INFO: Restarting Unikey with new settings...")
+_Log("INFO: Restarting UniKey with the new settings...")
 Run('"' & $g_sInstallExe & '"', $g_sInstallDir, @SW_HIDE)
 
-_CreateDesktopShortcut()
+_CreateShortcut()
 Exit 0
 
 Func _IsUniKeyInstalled()
-    ; Check if any unikey*.exe exists in the install directory
-    Return FileExists($g_sInstallExe) Or (FileFindFirstFile($g_sInstallDir & "\unikey*.exe") <> -1)
+    If FileExists($g_sInstallExe) Then Return True
+    Return FileFindFirstFile($g_sInstallDir & "\unikey*.exe") <> -1
 EndFunc
 
-Func _CreateDesktopShortcut()
-    If Not $g_bShortcut Then Return
-    If Not FileExists($g_sInstallExe) Then Return
-    Local $sLink = "C:\Users\Public\Desktop\UniKey.lnk"
-    If FileExists($sLink) Then Return
-    FileCreateShortcut($g_sInstallExe, $sLink, $g_sInstallDir, "", "UniKey", $g_sInstallExe, "", 0, @SW_SHOW)
-EndFunc
-
-
-Func _Log($sMsg)
-    Local $sLogPath = $g_sLogPath
-    Local $hLog = FileOpen($sLogPath, 1 + 256) ; FO_APPEND (1) + FO_UTF8_NOBOM (256)
-    If $hLog <> -1 Then
-        FileWriteLine($hLog, "[" & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & " " & @HOUR & ":" & @MIN & ":" & @SEC & "] [" & StringReplace($g_sSetupFilename, ".exe", "") & "] " & $sMsg)
-        FileClose($hLog)
+; Rewrites MacroPath for the current user, then imports the .reg file.
+Func _ImportSettings()
+    Local $sRegFile = @ScriptDir & "\unikey.reg"
+    If Not FileExists($sRegFile) Then
+        _Log("WARN: unikey.reg not found; keeping UniKey's built-in defaults.")
+        Return
     EndIf
+
+    _Log("INFO: Patching and importing unikey.reg settings...")
+    Local $sRegContent = FileRead($sRegFile)
+    Local $sEscapedMacro = StringReplace(@AppDataDir & "\Unikey\macro.txt", "\", "\\")
+    $sRegContent = StringRegExpReplace($sRegContent, '(?m)^"MacroPath"=.*$', '"MacroPath"="' & $sEscapedMacro & '"')
+
+    ; 32 + 2 = UTF-16LE with BOM + overwrite, the encoding reg.exe expects here
+    Local $sTempReg = @TempDir & "\unikey_patched.reg"
+    Local $hWrite = FileOpen($sTempReg, 32 + 2)
+    If $hWrite = -1 Then
+        _Log("WARN: Could not write the patched unikey.reg; skipping the import.")
+        Return
+    EndIf
+    FileWrite($hWrite, $sRegContent)
+    FileClose($hWrite)
+
+    RunWait('reg.exe import "' & $sTempReg & '"', "", @SW_HIDE)
+    FileDelete($sTempReg)
+EndFunc
+
+Func _CreateShortcut()
+    If Not $g_bShortcut Then Return
+    _CreatePublicShortcut($g_sInstallExe, "UniKey", $g_sInstallDir)
 EndFunc

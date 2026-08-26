@@ -1,81 +1,52 @@
-#RequireAdmin
+﻿#RequireAdmin
 #AutoIt3Wrapper_UseX64=y
 #NoTrayIcon
-#include <AutoItConstants.au3>
+#include "..\_installer_common.au3"
 
-; Generic Chrome installer (supports both EXE and Enterprise MSI installers).
-; $CmdLine[1] = setup filename (e.g. "chrome-standalone.exe" or "chrome-standalone.msi") [optional, fallback built-in]
-; $CmdLine[2] = desktop shortcut flag ("true"/"false") [optional, fallback false]
+; Chrome installer, handling both the standalone EXE and the Enterprise MSI.
+; Argument and exit-code contract: _installer_common.au3.
 
-Global $g_sSetupFilename = "chrome-standalone.exe"
-If $CmdLine[0] >= 1 Then
-    $g_sSetupFilename = $CmdLine[1]
-Else
-    If FileExists(@ScriptDir & "\chrome-standalone.msi") Then
-        $g_sSetupFilename = "chrome-standalone.msi"
-    ElseIf FileExists(@ScriptDir & "\chrome.msi") Then
-        $g_sSetupFilename = "chrome.msi"
-    ElseIf FileExists(@ScriptDir & "\chrome-standalone.exe") Then
-        $g_sSetupFilename = "chrome-standalone.exe"
-    ElseIf FileExists(@ScriptDir & "\chrome.exe") Then
-        $g_sSetupFilename = "chrome.exe"
-    EndIf
-EndIf
-Global Const $g_sSetupPath = @ScriptDir & "\" & $g_sSetupFilename
-
-Global $g_bShortcut = False
-Global $g_sLogPath = "C:\Auto-installer\install-apps.log"
-If $CmdLine[0] >= 4 Then $g_sLogPath = $CmdLine[4]
-If $CmdLine[0] >= 2 And StringLower($CmdLine[2]) = "true" Then $g_bShortcut = True
-
-If Not FileExists($g_sSetupPath) Then
-    _Log("ERROR: Setup file not found: " & $g_sSetupPath)
-    Exit 20
-EndIf
+_InitInstaller(_DetectChromeSetup())
+_RequireSetup()
 
 _Log("INFO: Checking if app is already installed...")
 If _IsChromeInstalled() Then
     _Log("INFO: App is already installed. Exiting with code 10.")
-    _CreateDesktopShortcut()
+    _CreateShortcut()
     Exit 10
 EndIf
 
-_Log("INFO: Starting installation...")
-Local $iExitCode = 0
-Local $sExt = StringLower(StringRight($g_sSetupFilename, 4))
-If $sExt = ".msi" Then
-    $iExitCode = RunWait('"' & @SystemDir & '\msiexec.exe" /i "' & $g_sSetupPath & '" /qn /norestart', @ScriptDir, @SW_HIDE)
+Local $bIsMsi = _SetupHasExt(".msi")
+Local $iExitCode
+If $bIsMsi Then
+    $iExitCode = _RunMsi($g_sSetupPath)
 Else
-    $iExitCode = RunWait('"' & $g_sSetupPath & '" /silent /install', @ScriptDir, @SW_HIDE)
+    $iExitCode = _RunSetupFlags("/silent /install")
+EndIf
+If @error Then Exit 21
+
+; msiexec returns 3010 for "success, reboot required" -- treat that as success
+If $iExitCode <> 0 And Not ($bIsMsi And $iExitCode = 3010) Then
+    _Log("ERROR: Installer returned non-zero exit code: " & $iExitCode)
+    Exit $iExitCode
 EndIf
 
-_Log("INFO: Installer finished with exit code: " & $iExitCode)
-If @error Then
-    _Log("ERROR: RunWait failed with AutoIt error: " & @error)
-    Exit 21
-EndIf
-
-If $sExt = ".msi" Then
-    ; msiexec returns 3010 for "success, reboot required" -- treat as success
-    If $iExitCode <> 0 And $iExitCode <> 3010 Then
-        _Log("ERROR: Installer returned non-zero exit code: " & $iExitCode)
-        Exit $iExitCode
-    EndIf
-Else
-    If $iExitCode <> 0 Then
-        _Log("ERROR: Installer returned non-zero exit code: " & $iExitCode)
-        Exit $iExitCode
-    EndIf
-EndIf
-
-_Log("INFO: Waiting for app to be fully registered...")
-If _WaitForChrome(900) Then
+If _WaitForInstall("_IsChromeInstalled", 900) Then
     _Log("INFO: Installation confirmed. Exiting with code 0.")
-    _CreateDesktopShortcut()
+    _CreateShortcut()
     Exit 0
 EndIf
 _Log("ERROR: Installation validation timed out.")
 Exit 22
+
+; Picks whichever setup file is actually present when no name was passed in.
+Func _DetectChromeSetup()
+    Local $aCandidates = ["chrome-standalone.msi", "chrome.msi", "chrome-standalone.exe", "chrome.exe"]
+    For $sName In $aCandidates
+        If FileExists(@ScriptDir & "\" & $sName) Then Return $sName
+    Next
+    Return "chrome-standalone.exe"
+EndFunc
 
 Func _IsChromeInstalled()
     Local $sPath = RegRead("HKLM64\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
@@ -83,41 +54,14 @@ Func _IsChromeInstalled()
     Return FileExists(@ProgramFilesDir & "\Google\Chrome\Application\chrome.exe")
 EndFunc
 
-Func _WaitForChrome($iTimeoutSeconds)
-    Local $hTimer = TimerInit()
-    While TimerDiff($hTimer) < $iTimeoutSeconds * 1000
-        If _IsChromeInstalled() Then Return True
-        Sleep(1000)
-    WEnd
-    Return False
-EndFunc
-
-Func _CreateDesktopShortcut()
+Func _CreateShortcut()
     If Not $g_bShortcut Then Return
 
-    ; Chrome's installer may place its own shortcut on the current user's Desktop.
-    ; Remove it so we don't end up with two Chrome icons on the merged Desktop view.
-    Local $sUserLink = @DesktopDir & "\Google Chrome.lnk"
-    If FileExists($sUserLink) Then FileDelete($sUserLink)
+    ; Chrome's installer drops its own shortcut on the current user's Desktop;
+    ; remove it so it does not sit beside the all-users one in the merged view.
+    _DeleteUserShortcut("Google Chrome")
 
     Local $sTarget = RegRead("HKLM64\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
-    If @error Or Not FileExists($sTarget) Then
-        $sTarget = @ProgramFilesDir & "\Google\Chrome\Application\chrome.exe"
-    EndIf
-    If Not FileExists($sTarget) Then Return
-
-    Local $sLink = "C:\Users\Public\Desktop\Google Chrome.lnk"
-    If Not FileExists($sLink) Then
-        FileCreateShortcut($sTarget, $sLink, @ProgramFilesDir & "\Google\Chrome\Application", "", "Google Chrome", $sTarget, "", 0, @SW_SHOW)
-    EndIf
-EndFunc
-
-Func _Log($sMsg)
-    Local $sLogPath = $g_sLogPath
-    Local $hLog = FileOpen($sLogPath, 1 + 256) ; FO_APPEND (1) + FO_UTF8_NOBOM (256)
-    If $hLog <> -1 Then
-        Local $sTag = StringRegExpReplace($g_sSetupFilename, "\.[^.]+$", "")
-        FileWriteLine($hLog, "[" & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & " " & @HOUR & ":" & @MIN & ":" & @SEC & "] [" & $sTag & "] " & $sMsg)
-        FileClose($hLog)
-    EndIf
+    If @error Or Not FileExists($sTarget) Then $sTarget = @ProgramFilesDir & "\Google\Chrome\Application\chrome.exe"
+    _CreatePublicShortcut($sTarget, "Google Chrome")
 EndFunc
