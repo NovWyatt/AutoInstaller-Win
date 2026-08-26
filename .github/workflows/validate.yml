@@ -1,0 +1,26 @@
+name: Validate
+
+# "Running" this project means reinstalling Windows, so CI cannot exercise it
+# end to end. What it can do is prove the shipped files are well-formed and
+# consistent with each other, which is where the bugs found so far actually
+# lived. See tools/validate.ps1 for the individual checks.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # Windows PowerShell 5.1, the same engine the project targets on the
+      # machines it installs, rather than pwsh.
+      - name: Run repository checks
+        shell: powershell
+        run: .\tools\validate.ps1

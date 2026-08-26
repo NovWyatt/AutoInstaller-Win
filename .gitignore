@@ -15,7 +15,6 @@ PROMPT.md
 /temp
 /.claude
 /.agents
-/.github
 /.vscode
 
 # Will be released later
@@ -35,6 +34,10 @@ AUTOINSTALLER.md
 !*.ini
 !/5b512ee8a59deb284ad0a6a035ba10b1.md5
 !/aea541d7f9574587656dc5125116e548.md5
+!/.github/
+!/.github/**
+!/tools/
+!/tools/**
 !/Antivirus
 !/Browsers
 !/Drivers

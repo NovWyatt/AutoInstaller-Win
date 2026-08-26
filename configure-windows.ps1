@@ -1,10 +1,18 @@
 [CmdletBinding()]
 param(
-    [string]$IniFile = "$PSScriptRoot\configure-windows.ini",
+    [string]$IniFile,
     [string]$LogFile = 'C:\Auto-installer\configure-windows.log'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# $PSScriptRoot is empty inside a param() default when a script declares
+# [CmdletBinding()] and is launched with -File, so resolve it here instead.
+# configure-windows.exe always passes -IniFile; this only covers manual runs.
+if (-not $IniFile) {
+    $here = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+    $IniFile = Join-Path $here 'configure-windows.ini'
+}
 $script:LogFile = $LogFile
 
 # Ensure HKU registry drive is available in PowerShell
