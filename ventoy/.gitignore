@@ -6,10 +6,12 @@ ventoy_grub.cfg
 
 # Keep
 !/.gitignore
-!/.README.md
+!/README.md
 !/ventoy.json.example
 !/ventoy.43.json.example
 !/ventoy.169.json.example
 !/ventoy.1610.json.example
-!/theme
-!/font
+!/theme/
+!/theme/**
+!/font/
+!/font/**
