@@ -3,7 +3,7 @@ name: Validate
 # "Running" this project means reinstalling Windows, so CI cannot exercise it
 # end to end. What it can do is prove the shipped files are well-formed and
 # consistent with each other, which is where the bugs found so far actually
-# lived. See tools/validate.ps1 for the individual checks.
+# lived. See ci/validate.ps1 for the individual checks.
 
 on:
   push:
@@ -23,4 +23,4 @@ jobs:
       # machines it installs, rather than pwsh.
       - name: Run repository checks
         shell: powershell
-        run: .\tools\validate.ps1
+        run: .\ci\validate.ps1

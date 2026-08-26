@@ -36,8 +36,8 @@ AUTOINSTALLER.md
 !/aea541d7f9574587656dc5125116e548.md5
 !/.github/
 !/.github/**
-!/tools/
-!/tools/**
+!/ci/
+!/ci/**
 !/Antivirus
 !/Browsers
 !/Drivers

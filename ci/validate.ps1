@@ -29,7 +29,7 @@
     Repository root. Defaults to the parent of this script's folder.
 
 .EXAMPLE
-    .\tools\validate.ps1
+    .\ci\validate.ps1
 #>
 [CmdletBinding()]
 param(
