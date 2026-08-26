@@ -1,31 +1,31 @@
 # GRUB2 gfxmenu theme -- GENERATED, do not edit by hand.
-# Designed for ratio 16:10 Dark style
+# Designed for ratio {{RATIO_LABEL}} {{STYLE_LABEL}} style
 # Source: ventoy/theme/template/theme.template.txt (see build-theme.ps1)
 
 # Global Property
 title-text: ""
-desktop-image: "background_dark1610_fb.jpg"
+desktop-image: "{{BACKGROUND}}"
 desktop-color: "#3B3B39"
 terminal-font: "Cascadia Code Regular 20"
-terminal-left: "15%"
-terminal-top: "16%"
-terminal-width: "55%"
+terminal-left: "{{TERMINAL_LEFT}}"
+terminal-top: "{{TERMINAL_TOP}}"
+terminal-width: "{{TERMINAL_WIDTH}}"
 terminal-height: "64%"
 terminal-border: "0"
 
 # Show the boot menu
 + boot_menu {
-  left = 16%
+  left = {{MENU_LEFT}}
   top = 18%
-  width = 52%
+  width = {{MENU_WIDTH}}
   height = 64%
   item_font = "Cascadia Code Regular 28"
-  item_color = "#6C6E70"
-  selected_item_color = "#CDCDCD"
-  icon_width = 84
-  icon_height = 84
+  item_color = "{{ITEM_COLOR}}"
+  selected_item_color = "{{SELECTED_ITEM_COLOR}}"
+  icon_width = {{ICON_SIZE}}
+  icon_height = {{ICON_SIZE}}
   item_icon_space = 24
-  item_height = 84
+  item_height = {{ICON_SIZE}}
   item_padding = 10
   item_spacing = 16
   selected_item_pixmap_style = "select_*.png"
@@ -34,11 +34,11 @@ terminal-border: "0"
 # Show a countdown message using the label component
 + label {
   top = 11%
-  left = 28%
-  width = 32%
+  left = {{LABEL_LEFT}}
+  width = {{LABEL_WIDTH}}
   align = "left"
   id = "__timeout__"
   text = "Booting in %d seconds"
-  color = "#CDCDCD"
+  color = "{{SELECTED_ITEM_COLOR}}"
   font = "Cascadia Code Regular 20"
 }

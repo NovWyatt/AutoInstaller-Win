@@ -1,12 +1,12 @@
-# GRUB2 gfxmenu Linux theme
+# GRUB2 gfxmenu theme -- GENERATED, do not edit by hand.
 # Designed for ratio 16:10 Light style
+# Source: ventoy/theme/template/theme.template.txt (see build-theme.ps1)
 
 # Global Property
 title-text: ""
 desktop-image: "background_light1610_gh.jpg"
 desktop-color: "#3B3B39"
 terminal-font: "Cascadia Code Regular 20"
-terminal-box: "terminal_box_*.png"
 terminal-left: "15%"
 terminal-top: "16%"
 terminal-width: "55%"

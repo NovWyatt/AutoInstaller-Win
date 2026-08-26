@@ -18,7 +18,8 @@
       4. Every .au3 is structurally sound (block/quote balance, resolvable calls)
       5. Every #include path resolves on disk
       6. The committed Unattend answer files still match their template
-      7. No tracked file is excluded by the .gitignore rules
+      7. The committed GRUB theme files still match their template
+      8. No tracked file is excluded by the .gitignore rules
 
     AutoIt cannot be installed on a CI runner, so check 4 stands in for the
     compiler. It is not a parser: it verifies block balance, quote balance, and
@@ -280,7 +281,19 @@ if (Test-Path -LiteralPath $builder) {
     Write-Result 'build-unattend.ps1' $false 'not found'
 }
 
-# ---- 7. .gitignore does not exclude tracked files -----------------------
+# ---- 7. GRUB theme drift ------------------------------------------------
+Start-Section 'GRUB theme files match their template'
+$themeBuilder = Join-Path (Get-Location) 'ventoy\theme\build-theme.ps1'
+if (Test-Path -LiteralPath $themeBuilder) {
+    $output = & $themeBuilder -Check 2>&1
+    $ok = ($LASTEXITCODE -eq 0)
+    if (-not $ok) { $output | ForEach-Object { Write-Host "    $_" -ForegroundColor Red } }
+    Write-Result 'build-theme.ps1 -Check' $ok $(if ($ok) { '' } else { 'theme files are out of date' })
+} else {
+    Write-Result 'build-theme.ps1' $false 'not found'
+}
+
+# ---- 8. .gitignore does not exclude tracked files -----------------------
 Start-Section '.gitignore keeps every tracked file'
 $tracked = @(& git ls-files)
 if ($LASTEXITCODE -ne 0) {

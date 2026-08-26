@@ -1,6 +1,11 @@
 /*
 *.pptx
 
-!/autoinstaller/
+# Keep
 !/.gitignore
+!/README.md
 !/*.png
+!/autoinstaller/
+!/build-theme.ps1
+!/template/
+!/template/**
