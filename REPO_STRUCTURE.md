@@ -10,6 +10,9 @@ A complete structure of the AutoInstaller repository.
 AutoInstaller/
 ├── .git
 │   └── ...
+├── .github
+│   └── workflows
+│       └── validate.yml
 ├── Antivirus
 │   ├── .gitignore
 │   ├── install_kaspersky.au3
@@ -18,6 +21,8 @@ AutoInstaller/
 │   ├── .gitignore
 │   ├── install_chrome-standalone.au3
 │   └── README.md
+├── ci
+│   └── validate.ps1
 ├── Drivers
 │   ├── SDIO
 │   ├── .gitignore
@@ -79,7 +84,14 @@ AutoInstaller/
 │   ├── .gitignore
 │   └── README.md
 ├── Unattend
+│   ├── template
+│   │   ├── disk-C.xml
+│   │   ├── disk-C_D.xml
+│   │   ├── disk-dyn_C_D.xml
+│   │   ├── disk-mandisk.xml
+│   │   └── unattend.template.xml
 │   ├── .gitignore
+│   ├── build-unattend.ps1
 │   ├── full_C.xml
 │   ├── full_C_D.xml
 │   ├── full_dyn_C_D.xml
@@ -246,13 +258,17 @@ AutoInstaller/
 │   │   │   ├── theme_light43_fb.txt
 │   │   │   ├── theme_light43_gh.txt
 │   │   │   └── theme_light43_htc.txt
+│   │   ├── template
+│   │   │   └── theme.template.txt
 │   │   ├── .gitignore
+│   │   ├── build-theme.ps1
 │   │   ├── preview_dark1610.png
 │   │   ├── preview_dark169.png
 │   │   ├── preview_dark43.png
 │   │   ├── preview_light1610.png
 │   │   ├── preview_light169.png
-│   │   └── preview_light43.png
+│   │   ├── preview_light43.png
+│   │   └── README.md
 │   ├── .gitignore
 │   ├── README.md
 │   ├── ventoy.1610.json.example
