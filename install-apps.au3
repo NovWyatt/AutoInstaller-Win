@@ -53,17 +53,20 @@ Switch $sMode
         _WriteLog("INFO", "Master launcher started in full mode.")
         _InstallApplications()
         _RunWindowsConfig()
-        _RunDrivers(False)
-        _RunReport()
+        ; install-drivers.exe is launched with -ReportAfterCompletion, so a successful
+        ; driver phase has already written report.md. That is the only way to get a
+        ; report when the driver phase reboots the machine and resumes via its task,
+        ; so generate one here only when the driver phase could not do it itself.
+        If Not _RunDrivers() Then _RunReport()
     Case "--drivers-only"
         _WriteLog("INFO", "Master launcher started in drivers-only mode.")
-        _RunDrivers(False)
+        If Not _RunDrivers() Then _RunReport()
     Case "--report"
         _WriteLog("INFO", "Generating installation report only.")
         _RunReport()
     Case Else
         _WriteLog("ERROR", "Unknown command-line mode: " & $sMode)
-        _ConsolePrint("ERROR", "Unknown mode '" & $sMode & "'. Valid: --full | --drivers-only | --resume-apps | --report")
+        _ConsolePrint("ERROR", "Unknown mode '" & $sMode & "'. Valid: --full | --drivers-only | --report")
         _ConsolePause()
         Exit 7
 EndSwitch
@@ -76,34 +79,38 @@ _ConsolePause()
 ;  CORE FLOW FUNCTIONS
 ; ════════════════════════════════════════════════════════════════════════════════
 
-Func _RunDrivers($bResumeApps)
+; Runs the driver phase. Returns True only when install-drivers.exe completed, in
+; which case it has already generated report.md itself (-ReportAfterCompletion).
+; Returns False when the driver phase could not run, so the caller knows it still
+; owes the user a report. Never Exits: an aborted driver phase must not cost the
+; user the summary of everything that ran before it.
+Func _RunDrivers()
     _ConsoleSectionHeader("Driver Installation")
     Local $sDriverLauncher = $g_sRoot & "\install-drivers.exe"
     If Not FileExists($sDriverLauncher) Then
         _WriteLog("ERROR", "install-drivers.exe was not found at " & $sDriverLauncher)
         _ConsolePrint("ERROR", "install-drivers.exe not found: " & $sDriverLauncher)
-        Exit 20
+        Return False
     EndIf
 
-    Local $sArguments = "-ReportAfterCompletion"
-    If $bResumeApps Then $sArguments = "-ResumeApps"
-
     _ConsolePrint("INFO", "Launching driver installer (Windows Update -- system may restart)...")
-    Local $iExitCode = ShellExecuteWait($sDriverLauncher, $sArguments, $g_sRoot, "open", @SW_HIDE)
-    If @error Then
-        _WriteLog("ERROR", "Could not start install-drivers.exe. AutoIt error=" & @error)
-        _ConsolePrint("ERROR", "Could not launch driver installer (AutoIt error=" & @error & ").")
-        Exit 21
+    Local $iExitCode = ShellExecuteWait($sDriverLauncher, "-ReportAfterCompletion", $g_sRoot, "open", @SW_HIDE)
+    Local $iLaunchError = @error
+    If $iLaunchError Then
+        _WriteLog("ERROR", "Could not start install-drivers.exe. AutoIt error=" & $iLaunchError)
+        _ConsolePrint("ERROR", "Could not launch driver installer (AutoIt error=" & $iLaunchError & ").")
+        Return False
     EndIf
 
     If $iExitCode <> 0 Then
         _WriteLog("ERROR", "Driver launcher returned exit code " & $iExitCode & ".")
         _ConsolePrint("ERROR", "Driver installer returned exit code " & $iExitCode & " -- continuing to report.")
-        Return  ; Don't Exit — fall through so _RunReport still generates the report
+        Return False
     EndIf
 
     _WriteLog("INFO", "Driver launcher completed or handed off to its continuation.")
     _ConsolePrint("OK", "Driver installation phase done (or handed off for reboot-continuation).")
+    Return True
 EndFunc
 
 Func _InstallApplications()

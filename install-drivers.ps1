@@ -182,23 +182,38 @@ function Invoke-SdioDriverInstallation {
 function Set-WindowsUpdatePolicy {
     # Configure WU to include drivers and security patches, exclude feature upgrades.
     try {
-        $wuPolicyPath     = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
-        $auPolicyPath     = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-        $targetPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsUpdate'
+        # Windows Update for Business policies all live under ...\Policies\Microsoft\Windows\WindowsUpdate.
+        # An earlier version wrote DisableOSUpgrade/TargetReleaseVersion to
+        # ...\Policies\Microsoft\WindowsUpdate (no 'Windows' node), where Windows never reads them.
+        $wuPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+        $auPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
 
-        New-Item -Path $wuPolicyPath     -Force -ErrorAction SilentlyContinue | Out-Null
-        New-Item -Path $auPolicyPath     -Force -ErrorAction SilentlyContinue | Out-Null
-        New-Item -Path $targetPolicyPath -Force -ErrorAction SilentlyContinue | Out-Null
+        New-Item -Path $wuPolicyPath -Force -ErrorAction SilentlyContinue | Out-Null
+        New-Item -Path $auPolicyPath -Force -ErrorAction SilentlyContinue | Out-Null
 
         # Include driver updates in quality/Windows Update scans
         Set-ItemProperty -Path $wuPolicyPath -Name 'ExcludeWUDriversInQualityUpdate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
         # Keep auto-update enabled
         Set-ItemProperty -Path $auPolicyPath -Name 'NoAutoUpdate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
         # Block Windows version upgrade offers
-        Set-ItemProperty -Path $targetPolicyPath -Name 'DisableOSUpgrade'     -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $targetPolicyPath -Name 'TargetReleaseVersion' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $wuPolicyPath -Name 'DisableOSUpgrade' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
 
-        Write-DriverLog INFO '[DRIVER] status=policy-set; detail=WU configured to include drivers+security, exclude feature upgrades'
+        # TargetReleaseVersion only takes effect together with TargetReleaseVersionInfo naming a
+        # concrete release; enabling the flag on its own leaves the machine pinned to nothing.
+        # Pin to whatever feature release is installed right now (e.g. '24H2').
+        $displayVersion = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue).DisplayVersion
+        if (-not $displayVersion) {
+            $displayVersion = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue).ReleaseId
+        }
+        if ($displayVersion) {
+            Set-ItemProperty -Path $wuPolicyPath -Name 'TargetReleaseVersion'     -Value 1               -Type DWord  -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $wuPolicyPath -Name 'TargetReleaseVersionInfo' -Value $displayVersion -Type String -Force -ErrorAction SilentlyContinue
+            Write-DriverLog INFO "[DRIVER] status=policy-set; detail=WU configured to include drivers+security; feature upgrades pinned to $displayVersion"
+        }
+        else {
+            Remove-ItemProperty -Path $wuPolicyPath -Name 'TargetReleaseVersion' -Force -ErrorAction SilentlyContinue
+            Write-DriverLog WARN '[DRIVER] status=policy-warn; detail=could not read the installed feature release; TargetReleaseVersion left unset (DisableOSUpgrade still applied)'
+        }
     }
     catch {
         Write-DriverLog WARN "[DRIVER] status=policy-warn; detail=could not fully apply WU policy (non-fatal): $($_.Exception.Message)"

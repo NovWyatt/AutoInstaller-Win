@@ -30,6 +30,18 @@ function Write-Log {
     Write-Host $line
 }
 
+# $ErrorActionPreference is 'Stop', and this script has no per-task error handling:
+# before this trap a single failure (a locked registry key, a missing drive) aborted
+# the run, silently skipping every task after it -- wallpaper, region and the
+# validation block included. The trap logs the failure and resumes at the next
+# script-scope statement, so one bad task costs only that task.
+$script:TrappedErrors = 0
+trap {
+    $script:TrappedErrors++
+    Write-Log ("ERROR: Unhandled failure at line {0}: {1}" -f $_.InvocationInfo.ScriptLineNumber, $_.Exception.Message)
+    continue
+}
+
 function Set-RegValue {
     param(
         [string]$Path,
@@ -321,24 +333,18 @@ Write-Log "INFO: [4] Taskbar: End Task context menu = $endTask (TaskbarEndTask=$
 # 5. Search box mode
 $searchMode = Get-IniValue -Ini $iniConfig -Section 'taskbar' -Key 'search_mode' -Default 'Hide'
 $searchKey = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
-switch -Regex ($searchMode) {
-    '^(icon|searchicon)$' {
-        Set-RegValue $searchKey 'SearchboxTaskbarMode' 1 'DWord'
-        Write-Log "INFO: [5] Taskbar: Search Icon only (SearchboxTaskbarMode=1)."
-    }
-    '^(full|box|searchbox)$' {
-        Set-RegValue $searchKey 'SearchboxTaskbarMode' 2 'DWord'
-        Write-Log "INFO: [5] Taskbar: Search Box (SearchboxTaskbarMode=2)."
-    }
-    '^(iconandlabel)$' {
-        Set-RegValue $searchKey 'SearchboxTaskbarMode' 3 'DWord'
-        Write-Log "INFO: [5] Taskbar: Search Icon and Label (SearchboxTaskbarMode=3)."
-    }
-    default {
-        Set-RegValue $searchKey 'SearchboxTaskbarMode' 0 'DWord'
-        Write-Log "INFO: [5] Taskbar: Search Hidden (SearchboxTaskbarMode=0)."
-    }
+# $appliedSearchboxMode records what was actually written, so the validation block
+# at the end asserts against reality instead of re-deriving the value with a
+# narrower match list (searchbox/box/searchicon used to be scored as a FAIL).
+$appliedSearchboxMode = switch -Regex ($searchMode) {
+    '^(icon|searchicon)$'    { 1; break }
+    '^(full|box|searchbox)$' { 2; break }
+    '^(iconandlabel)$'       { 3; break }
+    default                  { 0 }
 }
+Set-RegValue $searchKey 'SearchboxTaskbarMode' $appliedSearchboxMode 'DWord'
+Write-Log "INFO: [5] Taskbar: search_mode=$searchMode (SearchboxTaskbarMode=$appliedSearchboxMode)."
+
 
 # 8. Widgets (News and Interests)
 $widgetsEnabled = Get-IniBool -Ini $iniConfig -Section 'taskbar' -Key 'widgets' -Default $false
@@ -676,7 +682,13 @@ $startupApproved = @(
 )
 for ($i = 0; $i -lt $runKeys.Count; $i++) {
     if (Test-Path -LiteralPath $runKeys[$i]) {
-        $items = Get-ItemProperty -LiteralPath $runKeys[$i]
+        # Reading a Run key can fail on a permission-hardened hive; skip that hive
+        # rather than taking the rest of the configuration down with it.
+        $items = Get-ItemProperty -LiteralPath $runKeys[$i] -ErrorAction SilentlyContinue
+        if ($null -eq $items) {
+            Write-Log "WARN: Could not read startup key $($runKeys[$i]); skipping."
+            continue
+        }
         foreach ($prop in $items.psobject.properties) {
             $name = $prop.Name
             if ($name -notin @('PSPath', 'PSParentPath', 'PSChildName', 'PSDrive', 'PSProvider')) {
@@ -1007,14 +1019,18 @@ function Assert-Reg {
 }
 
 if (-not (Assert-Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'HideFileExt' ($(if ($showExt) { 0 } else { 1 })))) { $valFails++ }
-if (-not (Assert-Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' ($(switch ($searchMode.ToLowerInvariant()) { 'icon' { 1 } 'full' { 2 } 'iconandlabel' { 3 } default { 0 } })))) { $valFails++ }
+if (-not (Assert-Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' $appliedSearchboxMode)) { $valFails++ }
 if (-not (Assert-Reg 'HKCU:\SOFTWARE\Microsoft\Clipboard' 'EnableClipboardHistory' ($(if ($clipHist) { 1 } else { 0 })))) { $valFails++ }
-if (-not (Assert-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1)) { $valFails++ }
+# Only assert long paths when the INI actually asked for them; asserting this
+# unconditionally reported a false FAIL whenever enable_long_paths=false.
+if ($enableLongPaths) {
+    if (-not (Assert-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1)) { $valFails++ }
+}
 
-if ($valFails -eq 0) {
+if ($valFails -eq 0 -and $script:TrappedErrors -eq 0) {
     Write-Log "INFO: Windows configuration completed successfully with 0 validation errors."
 } else {
-    Write-Log "WARN: Windows configuration completed with $valFails validation warning(s)."
+    Write-Log "WARN: Windows configuration completed with $valFails validation warning(s) and $($script:TrappedErrors) skipped task(s)."
 }
 
 Write-Log "======================================================================"
