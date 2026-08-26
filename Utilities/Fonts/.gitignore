@@ -1,0 +1,7 @@
+# Ignore
+*
+
+# Keep
+!*.au3
+!*.ps1
+!/.gitignore
