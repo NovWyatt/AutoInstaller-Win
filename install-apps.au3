@@ -223,7 +223,9 @@ Func _InstallApplications()
             Local $iSetupSlash = StringInStr($sSetupBasename, "/", 0, -1)
             If $iSetupSlash > 0 Then $sSetupBasename = StringMid($sSetupBasename, $iSetupSlash + 1)
             ; Pass setup name, shortcut flag, and (for special installers) the clean flag as CLI args
-            Local $sInstallArgs = '"' & $sSetupBasename & '" "' & $sShortcutFlag & '" "' & $g_sCleanFonts & '" "' & $g_sLogPath & '"'
+            ; $CmdLine[5] is always supplied, empty when the target has no `option`
+            ; entry, so the argument positions never shift under an installer.
+            Local $sInstallArgs = '"' & $sSetupBasename & '" "' & $sShortcutFlag & '" "' & $g_sCleanFonts & '" "' & $g_sLogPath & '" "' & $aTargets[$i][5] & '"'
             Local $iExitCode = ShellExecuteWait($sInstallPath, $sInstallArgs, $g_sRoot, "open", @SW_HIDE)
             If @error Then
                 $aStatus[$i] = 0
@@ -464,21 +466,25 @@ Func _LoadConfiguration($sConfigPath, ByRef $aTargets, ByRef $iMaxIteration)
     Local $aMatches = StringRegExp($sContent, '(?im)^\s*(\d+)\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(true|false)\s*,\s*(true|false)\s*;', 3)
     If @error Or UBound($aMatches) = 0 Or Mod(UBound($aMatches), 5) <> 0 Then Return False
 
+    ; Column 5 holds the optional per-target argument from the `option` block.
     Local $iTargetCount = UBound($aMatches) / 5
-    ReDim $aTargets[$iTargetCount][5]
+    ReDim $aTargets[$iTargetCount][6]
     Local $iMatch = 0
     For $i = 0 To $iTargetCount - 1
         For $j = 0 To 4
             $aTargets[$i][$j] = $aMatches[$iMatch]
             $iMatch += 1
         Next
+        $aTargets[$i][5] = ""
     Next
+
+    _LoadTargetOptions($sContent, $aTargets)
 
     ; Sort by configured index, then reject duplicate indexes.
     For $i = 0 To $iTargetCount - 2
         For $j = $i + 1 To $iTargetCount - 1
             If Int($aTargets[$j][0]) < Int($aTargets[$i][0]) Then
-                For $k = 0 To 4
+                For $k = 0 To 5
                     Local $sSwap = $aTargets[$i][$k]
                     $aTargets[$i][$k] = $aTargets[$j][$k]
                     $aTargets[$j][$k] = $sSwap
@@ -492,6 +498,27 @@ Func _LoadConfiguration($sConfigPath, ByRef $aTargets, ByRef $iMaxIteration)
     Next
 
     Return True
+EndFunc
+
+; Fills column 5 of $aTargets from the INI's `option=[ index,"argument"; ]` block.
+; Entries naming an index that is not in `target` are ignored; the block itself
+; is optional, so an INI without one simply leaves every argument empty.
+Func _LoadTargetOptions($sContent, ByRef $aTargets)
+    Local $aBlock = StringRegExp($sContent, "(?ims)^\s*option\s*=\s*\[(.*?)\]\s*;", 1)
+    If @error Or UBound($aBlock) <> 1 Then Return
+
+    Local $aOptions = StringRegExp($aBlock[0], '(?im)^\s*(\d+)\s*,\s*"([^"]*)"\s*;', 3)
+    If @error Then Return
+
+    For $i = 0 To UBound($aOptions) - 1 Step 2
+        Local $iIndex = Int($aOptions[$i])
+        For $j = 0 To UBound($aTargets) - 1
+            If Int($aTargets[$j][0]) = $iIndex Then
+                $aTargets[$j][5] = $aOptions[$i + 1]
+                ExitLoop
+            EndIf
+        Next
+    Next
 EndFunc
 
 Func _InitializeLog($sLogPath)

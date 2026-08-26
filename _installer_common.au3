@@ -17,6 +17,8 @@
 ;    $CmdLine[2]  desktop shortcut flag, "true" / "false"
 ;    $CmdLine[3]  clean_after_installing flag, "true" / "false"
 ;    $CmdLine[4]  log file path
+;    $CmdLine[5]  optional per-target argument from the INI's `option` block,
+;                 empty when the target has no entry
 ;
 ;  ── Exit code contract (read by install-apps.exe) ──
 ;     0  installed and verified          10  already installed, nothing to do
@@ -30,6 +32,7 @@ Global $g_bShortcut      = False
 Global $g_bClean         = False
 Global $g_sLogPath       = "C:\Auto-installer\install-apps.log"
 Global $g_sLogTag        = ""
+Global $g_sOption        = ""
 
 ; ──────────────────────────────────────────────────────────────────────────────
 ;  Startup
@@ -46,6 +49,7 @@ Func _InitInstaller($sDefaultSetupName, $sLogTag = "")
     If $CmdLine[0] >= 2 And StringLower($CmdLine[2]) = "true" Then $g_bShortcut = True
     If $CmdLine[0] >= 3 And StringLower($CmdLine[3]) = "true" Then $g_bClean = True
     If $CmdLine[0] >= 4 And $CmdLine[4] <> "" Then $g_sLogPath = $CmdLine[4]
+    If $CmdLine[0] >= 5 Then $g_sOption = $CmdLine[5]
 
     $g_sLogTag = $sLogTag
     If $g_sLogTag = "" Then $g_sLogTag = StringRegExpReplace($g_sSetupFilename, "\.[^.\\/]+$", "")

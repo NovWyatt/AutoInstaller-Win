@@ -4,18 +4,27 @@
 #include "..\..\_installer_common.au3"
 
 ; Office 2024 ProPlus, driven by the Office Deployment Tool:
-;   office2024.exe /configure full_en.xml
+;   office2024.exe /configure <config>.xml
+;
+; The config decides which apps and which UI language are installed. Pick one
+; through the `option` block in install-apps.ini instead of editing this file.
 ;
 ; Shortcuts are created for every Office app whose EXE is present under Office16
-; after the install. That honours the ExcludeApp entries in full_en.xml without
-; parsing any XML: an excluded app simply has no EXE on disk.
+; after the install. That honours the ExcludeApp entries in the chosen config
+; without parsing any XML: an excluded app simply has no EXE on disk.
 ; Argument and exit-code contract: _installer_common.au3.
 
 Global Const $g_sC2RKey = "HKLM64\SOFTWARE\Microsoft\Office\ClickToRun\Configuration"
-Global Const $g_sConfigPath = @ScriptDir & "\full_en.xml"
 
 _InitInstaller("office2024.exe")
 _RequireSetup()
+
+; Which ODT config to run comes from the `option` block in install-apps.ini,
+; arriving as $CmdLine[5]; full_en.xml is the fallback when nothing is set. Only
+; the file name is kept, so an entry cannot reach outside this folder.
+Global $g_sConfigName = "full_en.xml"
+If $g_sOption <> "" Then $g_sConfigName = StringRegExpReplace($g_sOption, "^.*[\\/]", "")
+Global $g_sConfigPath = @ScriptDir & "\" & $g_sConfigName
 
 If Not FileExists($g_sConfigPath) Then
     _Log("ERROR: ODT configuration file not found: " & $g_sConfigPath)
@@ -29,6 +38,7 @@ If _IsOffice2024Installed() Then
     Exit 10
 EndIf
 
+_Log("INFO: Using Office Deployment Tool configuration: " & $g_sConfigName)
 Local $iExitCode = _RunSetupFlags('/configure "' & $g_sConfigPath & '"')
 If @error Then Exit 21
 If $iExitCode <> 0 Then
