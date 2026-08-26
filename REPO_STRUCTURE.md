@@ -22,6 +22,7 @@ AutoInstaller/
 │   ├── install_chrome-standalone.au3
 │   └── README.md
 ├── ci
+│   ├── Test-ExtractPrune.ps1
 │   └── validate.ps1
 ├── Drivers
 │   ├── SDIO
