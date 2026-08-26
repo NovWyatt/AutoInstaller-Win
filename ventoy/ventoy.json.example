@@ -4,12 +4,12 @@
     ],
     "theme":{
         "file":[
-            "/ventoy/theme/1172005thinh/theme_light169_htc.txt",
-            "/ventoy/theme/1172005thinh/theme_dark169_htc.txt",
-            "/ventoy/theme/1172005thinh/theme_light169_fb.txt",
-            "/ventoy/theme/1172005thinh/theme_dark169_fb.txt",
-            "/ventoy/theme/1172005thinh/theme_light169_gh.txt",
-            "/ventoy/theme/1172005thinh/theme_dark169_gh.txt"
+            "/ventoy/theme/autoinstaller/theme_light169_htc.txt",
+            "/ventoy/theme/autoinstaller/theme_dark169_htc.txt",
+            "/ventoy/theme/autoinstaller/theme_light169_fb.txt",
+            "/ventoy/theme/autoinstaller/theme_dark169_fb.txt",
+            "/ventoy/theme/autoinstaller/theme_light169_gh.txt",
+            "/ventoy/theme/autoinstaller/theme_dark169_gh.txt"
         ],
         "gfxmode": "1920x1080",
         "ventoy_left": "72%",
@@ -18,7 +18,7 @@
         "fonts":[
             "/ventoy/font/cascadia-code/cascadia-code_16.pf2",
             "/ventoy/font/cascadia-code/cascadia-code_20.pf2",
-            "/ventoy/font/cascadia-code/cascaida-code_24.pf2",
+            "/ventoy/font/cascadia-code/cascadia-code_24.pf2",
             "/ventoy/font/cascadia-code/cascadia-code_28.pf2"
         ]
     },

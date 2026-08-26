@@ -108,7 +108,7 @@ if ($RemainingArgs -and $RemainingArgs.Count -gt 0) {
 
 $TOOL_NAME    = 'extract'
 $TOOL_VERSION = '1.0.0'
-$TOOL_AUTHOR  = '1172005thinh'
+$TOOL_AUTHOR  = 'NovWyatt'
 
 # ------------------------------------------------------------------------------
 # 1. Version Screen

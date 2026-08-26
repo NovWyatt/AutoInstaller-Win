@@ -52,7 +52,7 @@ The script will trigger the WU COM API search update and installation as a fallb
 
 ## TESTING LIMITATION
 
-The author `1172005thinh` has limited real physical hardware to conduct a testing for this drivers installation automation script.
+This driver automation has not been tested across a wide range of real physical hardware.
 
 - **Virtual environment limitations**: Virtual machines often lack the diverse range of hardware components (like graphics cards, chipsets, and network adapters) present in physical machines, making it difficult to fully validate driver compatibility and functionality across different hardware configurations.
 

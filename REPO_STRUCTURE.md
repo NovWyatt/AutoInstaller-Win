@@ -124,7 +124,7 @@ AutoInstaller/
 │   │       ├── cascadia-code_30.pf2
 │   │       └── cascadia-code_32.pf2
 │   ├── theme
-│   │   ├── 1172005thinh
+│   │   ├── autoinstaller
 │   │   │   ├── icons
 │   │   │   │   ├── 4MLinux.png
 │   │   │   │   ├── AlpineLinux.png

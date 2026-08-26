@@ -1,6 +1,10 @@
 # LICENSE
 
-**Copyright 2026 [1172005thinh](https://github.com/1172005thinh)**
+**Copyright 2026 [NovWyatt](https://github.com/NovWyatt)** — modifications in this fork
+
+**Copyright 2026 [1172005thinh](https://github.com/1172005thinh)** — original work
+
+AutoInstaller-Win is a fork of [1172005thinh/AutoInstaller](https://github.com/1172005thinh/AutoInstaller). The MIT terms below require the original copyright notice to be kept in all copies, so it stays regardless of how much of the code is rewritten. Anything added or changed in this fork is covered by the first notice, under the same terms.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
