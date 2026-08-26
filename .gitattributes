@@ -1,0 +1,49 @@
+# Line endings and file classification.
+#
+# Without this file every checkout depends on the contributor's core.autocrlf,
+# so the same commit can produce different bytes on different machines and text
+# files churn between CRLF and LF for no reason. Worse, two build scripts here
+# write CRLF and compare byte-for-byte against what is committed
+# (Unattend/build-unattend.ps1 and ventoy/theme/build-theme.ps1), so a checkout
+# that produced LF would report the committed files as stale.
+#
+# These rules pin the behaviour this repository already has: LF in the object
+# store, CRLF in the working tree. Nothing changes on disk by adding them.
+
+# Normalise everything git detects as text, storing LF in the repository.
+* text=auto
+
+# ---------------------------------------------------- CRLF in the working tree
+*.ps1     text eol=crlf
+*.au3     text eol=crlf
+*.ini     text eol=crlf
+*.xml     text eol=crlf
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
+*.md      text eol=crlf
+*.json    text eol=crlf
+*.txt     text eol=crlf
+*.yml     text eol=crlf
+*.example text eol=crlf
+
+# ------------------------------------------------------------------- binary
+# Never converted, never diffed as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.pf2   binary
+*.exe   binary
+*.msi   binary
+*.zip   binary
+*.iso   binary
+*.ttf   binary
+*.otf   binary
+*.ttc   binary
+
+# UTF-16LE with a BOM. reg.exe rejects any other encoding, and a line-ending
+# rewrite would corrupt it. Git only avoids that today by sniffing NUL bytes.
+*.reg   binary
+
+# Empty partition markers -- the name is the signal, the content is irrelevant.
+*.md5   binary

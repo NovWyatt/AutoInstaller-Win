@@ -14,6 +14,21 @@ function Get-LogLines {
     return @()
 }
 
+# The logs are append-only, so a machine that has been through the installer more
+# than once holds every run. Reporting the whole file replays failures that were
+# already fixed, so each log is trimmed to its most recent session first.
+function Select-LatestSession {
+    param([string[]] $Lines, [string] $StartPattern)
+    if (-not $Lines -or $Lines.Count -eq 0) { return @() }
+
+    $start = -1
+    for ($i = $Lines.Count - 1; $i -ge 0; $i--) {
+        if ($Lines[$i] -match $StartPattern) { $start = $i; break }
+    }
+    if ($start -lt 0) { return @($Lines) }
+    return @($Lines[$start..($Lines.Count - 1)])
+}
+
 function Escape-MarkdownTableValue {
     param([AllowNull()] [string] $Value)
     if ($null -eq $Value) { return '' }
@@ -54,6 +69,12 @@ try {
     $pkgLines        = @(Get-LogLines $removePkgLog)
     $capLines        = @(Get-LogLines $removeCapLog)
     $featLines       = @(Get-LogLines $removeFeatLog)
+
+    # Each of these logs carries a recognisable "a new run starts here" line.
+    $appsLines   = Select-LatestSession -Lines $appsLines   -StartPattern 'Console opened\. Mode='
+    $configLines = Select-LatestSession -Lines $configLines -StartPattern 'Starting Windows Post-Installation Configuration Engine'
+    # Drivers span reboots, so a session starts at iteration 1, not at every pass.
+    $driverLines = Select-LatestSession -Lines $driverLines -StartPattern 'status=started; detail=iteration 1 of'
 
     $allLogLines = @($setupLines + $appsLines + $configLines + $driverLines + $specializeLines + $firstLogonLines)
 

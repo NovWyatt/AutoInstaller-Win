@@ -45,6 +45,19 @@ EndIf
 Local $sMode = "--full"
 If $CmdLine[0] > 0 Then $sMode = StringLower($CmdLine[1])
 
+; --no-pause lets an unattended profile finish without waiting for a keypress.
+Global $g_bPause = True
+For $i = 1 To $CmdLine[0]
+    If StringLower($CmdLine[$i]) = "--no-pause" Then
+        $g_bPause = False
+        If $i = 1 Then $sMode = "--full"
+    EndIf
+Next
+
+; The banner prints the log path, so pick it up from the INI first -- otherwise
+; it always advertises the built-in default even when the INI redirects it.
+_PreloadLogPath($g_sRoot & "\install-apps.ini")
+
 _ConsoleBanner($sMode)
 _WriteLog("INFO", "Console opened. Mode=" & $sMode & "; Root=" & $g_sRoot)
 
@@ -66,7 +79,7 @@ Switch $sMode
         _RunReport()
     Case Else
         _WriteLog("ERROR", "Unknown command-line mode: " & $sMode)
-        _ConsolePrint("ERROR", "Unknown mode '" & $sMode & "'. Valid: --full | --drivers-only | --report")
+        _ConsolePrint("ERROR", "Unknown mode '" & $sMode & "'. Valid: --full | --drivers-only | --report  [--no-pause]")
         _ConsolePause()
         Exit 7
 EndSwitch
@@ -433,6 +446,19 @@ EndFunc
 
 Func _ConsolePause()
     _CW(@CRLF & $g_cDim & "--------------------------------------------" & $g_cRst & @CRLF)
+
+    ; Under an unattended profile nobody is at the keyboard, and FirstLogon waits
+    ; on this process, so blocking here would leave the machine sitting at a
+    ; console until someone pressed a key.
+    If Not $g_bPause Then
+        _CW($g_cDim & "  --no-pause given; closing." & $g_cRst & @CRLF)
+        If $g_hConOut <> -1 Then
+            FileClose($g_hConOut)
+            $g_hConOut = -1
+        EndIf
+        Return
+    EndIf
+
     _CW($g_cWht & "  Press Enter to close this window..." & $g_cRst & @CRLF)
     Local $hStdin = FileOpen("CONIN$", 0)
     FileReadLine($hStdin)
@@ -519,6 +545,16 @@ Func _LoadTargetOptions($sContent, ByRef $aTargets)
             EndIf
         Next
     Next
+EndFunc
+
+; Reads only log_path from the INI, early, so the banner and any startup error
+; are written where the user asked for them.
+Func _PreloadLogPath($sConfigPath)
+    If Not FileExists($sConfigPath) Then Return
+    Local $sContent = FileRead($sConfigPath)
+    If @error Then Return
+    Local $aLogPath = StringRegExp($sContent, "(?im)^\s*log_path\s*=\s*([^;\r\n]+)\s*;", 1)
+    If IsArray($aLogPath) Then _InitializeLog(_ToWindowsPath($aLogPath[0]))
 EndFunc
 
 Func _InitializeLog($sLogPath)

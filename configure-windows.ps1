@@ -159,6 +159,36 @@ function Get-IniList {
     return @($items)
 }
 
+# Copies a wallpaper into the working folder on the system drive and returns the
+# new path, or '' when it cannot be staged.
+#
+# Windows stores the wallpaper as a path and re-reads it on every logon. This
+# script runs from the USB, so resolving "wallpaper.png" against $PSScriptRoot
+# used to write something like S:\wallpaper.png into the registry -- correct
+# until the stick is unplugged, at which point the desktop and lock screen point
+# at a drive that is not there any more.
+function Copy-WallpaperLocally {
+    param([string] $SourcePath, [string] $BaseName)
+
+    try {
+        $localDir = Split-Path -Path $script:LogFile -Parent
+        if (-not $localDir) { $localDir = 'C:\Auto-installer' }
+        if (-not (Test-Path -LiteralPath $localDir)) {
+            $null = New-Item -ItemType Directory -Path $localDir -Force -ErrorAction Stop
+        }
+
+        $target = Join-Path $localDir ($BaseName + [System.IO.Path]::GetExtension($SourcePath))
+        if ((Resolve-Path -LiteralPath $SourcePath).Path -ieq $target) { return $target }
+
+        Copy-Item -LiteralPath $SourcePath -Destination $target -Force -ErrorAction Stop
+        return $target
+    }
+    catch {
+        Write-Log "WARN: Could not stage '$SourcePath' on the system drive: $($_.Exception.Message)"
+        return ''
+    }
+}
+
 # Resolve target application executable or shortcut
 function Resolve-AppPath {
     param([string]$AppKey)
@@ -844,10 +874,25 @@ if ($desktopWp.ToLowerInvariant() -ne 'default') {
         } catch {
             Write-Log "WARN: [24] Failed to download wallpaper URL: $($_.Exception.Message)"
         }
-    } elseif (Test-Path -LiteralPath $desktopWp) {
-        $wpPath = (Resolve-Path -LiteralPath $desktopWp).Path
-    } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot $desktopWp)) {
-        $wpPath = (Join-Path $PSScriptRoot $desktopWp)
+    } else {
+        $source = ''
+        if (Test-Path -LiteralPath $desktopWp) {
+            $source = (Resolve-Path -LiteralPath $desktopWp).Path
+        } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot $desktopWp)) {
+            $source = (Join-Path $PSScriptRoot $desktopWp)
+        }
+
+        # Never point the registry at the source: it is usually on the USB.
+        if ($source) {
+            $staged = Copy-WallpaperLocally -SourcePath $source -BaseName 'wallpaper'
+            if ($staged) {
+                $wpPath = $staged
+            } else {
+                Write-Log "WARN: [24] Keeping the default wallpaper; '$source' could not be copied to the system drive."
+            }
+        } elseif ($desktopWp) {
+            Write-Log "WARN: [24] Wallpaper '$desktopWp' not found; keeping the default."
+        }
     }
 }
 
@@ -882,10 +927,23 @@ if ($lockscreenWp.ToLowerInvariant() -ne 'default') {
         } catch {
             Write-Log "WARN: [25] Failed to download lockscreen URL: $($_.Exception.Message)"
         }
-    } elseif (Test-Path -LiteralPath $lockscreenWp) {
-        $lockPath = (Resolve-Path -LiteralPath $lockscreenWp).Path
-    } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot $lockscreenWp)) {
-        $lockPath = (Join-Path $PSScriptRoot $lockscreenWp)
+    } else {
+        $lockSource = ''
+        if (Test-Path -LiteralPath $lockscreenWp) {
+            $lockSource = (Resolve-Path -LiteralPath $lockscreenWp).Path
+        } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot $lockscreenWp)) {
+            $lockSource = (Join-Path $PSScriptRoot $lockscreenWp)
+        }
+
+        # Same reason as the desktop wallpaper: the lock screen path outlives the USB.
+        if ($lockSource) {
+            $lockPath = Copy-WallpaperLocally -SourcePath $lockSource -BaseName 'lockscreen'
+            if (-not $lockPath) {
+                Write-Log "WARN: [25] Keeping the default lock screen; '$lockSource' could not be copied to the system drive."
+            }
+        } elseif ($lockscreenWp) {
+            Write-Log "WARN: [25] Lock screen image '$lockscreenWp' not found; keeping the default."
+        }
     }
 
     if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {

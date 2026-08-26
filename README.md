@@ -73,7 +73,12 @@ the result afterwards. Adding an app means writing one.
 
 Everything lands in `C:\Auto-installer\`, and `report.md` summarises the whole
 run — which apps installed, which were already present, which failed and why,
-which settings applied, which drivers were touched.
+which settings applied, which drivers were touched. The logs are append-only, so
+the report covers the most recent run rather than replaying every earlier one.
+
+The console shows live progress and waits for a keypress at the end so you can
+read the summary. Pass `--no-pause` to `Auto-installer.exe` to have it close on
+its own, for a genuinely hands-off profile.
 
 ---
 
