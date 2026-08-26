@@ -98,7 +98,7 @@ AutoInstaller/
 ├── install-drivers.ps1                         <-- PowerShell script to install drivers
 ├── report.au3                                  <-- AutoIt script to generate report
 ├── report.ps1                                  <-- PowerShell script to generate report
-├── update_logs.ps1                             <-- PowerShell script to update logs
+├── _installer_common.au3                       <-- Shared scaffold included by every install_*.au3
 └── wallpaper.png                               <-- Example wallpaper image
 ```
 

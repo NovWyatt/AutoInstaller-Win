@@ -1,19 +1,26 @@
 # REPO STRUCTURE
 
-A complete structure of AutoInstaller repository:
+A complete structure of the AutoInstaller repository.
+
+> Generated from the tracked file list. `.git`, `Drivers/SDIO` (user-supplied
+> driver pack) and `report.exe` (build output) are shown for context but are
+> not tracked in the repository.
 
 ``` txt
 AutoInstaller/
 ├── .git
 │   └── ...
 ├── Antivirus
+│   ├── .gitignore
 │   ├── install_kaspersky.au3
 │   └── README.md
 ├── Browsers
+│   ├── .gitignore
 │   ├── install_chrome-standalone.au3
 │   └── README.md
 ├── Drivers
 │   ├── SDIO
+│   ├── .gitignore
 │   └── README.md
 ├── Environment
 │   ├── IDEs
@@ -26,23 +33,28 @@ AutoInstaller/
 │   │   ├── install_python.au3
 │   │   └── README.md
 │   ├── VCRedist
-│   │   ├── install_vcredist.au3
-│   │   └── README.md
+│   │   └── install_vcredist.au3
+│   ├── .gitignore
 │   └── README.md
 ├── Office
 │   ├── LibreOffice
 │   │   ├── install_libreoffice.au3
-│   │   └── README.md      
+│   │   └── README.md
 │   ├── Office2024
 │   │   ├── full_en.xml
 │   │   ├── full_vi.xml
-│   │   ├── wepa_en.xml
-│   │   ├── we_en.xml
-│   │   ├── wep_en.xml
 │   │   ├── install_office2024.au3
-│   │   └── README.md
+│   │   ├── README.md
+│   │   ├── we_en.xml
+│   │   ├── we_vi.xml
+│   │   ├── wep_en.xml
+│   │   ├── wep_vi.xml
+│   │   ├── wepa_en.xml
+│   │   └── wepa_vi.xml
+│   ├── .gitignore
 │   └── README.md
 ├── Socials
+│   ├── .gitignore
 │   ├── install_discord.au3
 │   ├── install_zalo.au3
 │   └── README.md
@@ -51,6 +63,7 @@ AutoInstaller/
 │   │   ├── .gitignore
 │   │   ├── install_7z.au3
 │   │   ├── install_winrar.au3
+│   │   ├── rarreg.key.example
 │   │   └── README.md
 │   ├── DesktopSupporters
 │   │   ├── install_teamviewer.au3
@@ -60,9 +73,11 @@ AutoInstaller/
 │   │   ├── install_notepadpp.au3
 │   │   ├── install_vscode.au3
 │   │   └── README.md
-│   └── ScreenRecorders
-│       ├── install_obs.au3
-│       └── README.md
+│   ├── ScreenRecorders
+│   │   ├── install_obs.au3
+│   │   └── README.md
+│   ├── .gitignore
+│   └── README.md
 ├── Unattend
 │   ├── .gitignore
 │   ├── full_C.xml
@@ -85,15 +100,15 @@ AutoInstaller/
 │   ├── Fonts
 │   │   ├── .gitignore
 │   │   ├── install_fonts.au3
-│   │   ├── install_fonts.ps1
-│   │   └── README.md
+│   │   └── install_fonts.ps1
 │   ├── MediaPlayers
 │   │   ├── install_mpc.au3
 │   │   └── README.md
-│   └── VietnameseKeyboards
-│       ├── install_unikey.au3
-│       ├── unikey.reg
-│       └── README.md
+│   ├── VietnameseKeyboards
+│   │   ├── install_unikey.au3
+│   │   └── unikey.reg
+│   ├── .gitignore
+│   └── README.md
 ├── ventoy
 │   ├── font
 │   │   └── cascadia-code
@@ -237,19 +252,22 @@ AutoInstaller/
 │   │   ├── preview_dark43.png
 │   │   ├── preview_light1610.png
 │   │   ├── preview_light169.png
-│   │   ├── preview_light43.png
-│   │   └── README.md
+│   │   └── preview_light43.png
+│   ├── .gitignore
 │   ├── README.md
 │   ├── ventoy.1610.json.example
 │   ├── ventoy.169.json.example
 │   ├── ventoy.43.json.example
 │   └── ventoy.json.example
 ├── .gitignore
+├── 5b512ee8a59deb284ad0a6a035ba10b1.md5
+├── _installer_common.au3
+├── aea541d7f9574587656dc5125116e548.md5
 ├── compile-au2exe.ps1
-├── extract.ps1
 ├── configure-windows.au3
 ├── configure-windows.ini
 ├── configure-windows.ps1
+├── extract.ps1
 ├── icon.ico
 ├── icon.png
 ├── install-apps.au3
@@ -258,11 +276,10 @@ AutoInstaller/
 ├── install-drivers.ps1
 ├── LICENSE.md
 ├── README.md
+├── REPO_STRUCTURE.md
 ├── report.au3
 ├── report.exe
 ├── report.ps1
-├── REPO_STRUCTRE.md
-├── USB_STRUCTRE.md
-├── update_logs.ps1
+├── USB_STRUCTURE.md
 └── wallpaper.png
 ```

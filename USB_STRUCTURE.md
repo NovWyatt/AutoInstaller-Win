@@ -284,7 +284,6 @@ USB/
 ├── install-drivers.ps1
 ├── report.exe
 ├── report.ps1
-├── update_logs.ps1
 ├── wallpaper.png
 └── aea541d7f9574587656dc5125116e548.md5
 ```
