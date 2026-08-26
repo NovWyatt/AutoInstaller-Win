@@ -23,6 +23,11 @@ Global $g_sRoot                 = ""
 Global $g_sLogPath              = $g_sDefaultLogPath
 Global $g_hConOut               = -1   ; FileOpen handle to the allocated console
 Global $g_sCleanFonts           = "false"  ; clean_after_installing setting from INI
+; Declared here, not next to the argument scan below: the administrator and
+; marker-not-found paths call _ConsolePause() before that point, and an
+; undeclared $g_bPause reads as empty, which would close the console on the
+; very errors the user needs to read.
+Global $g_bPause                = True     ; cleared by --no-pause
 
 ; ════════════════════════════════════════════════════════════════════════════════
 ;  STARTUP
@@ -46,7 +51,6 @@ Local $sMode = "--full"
 If $CmdLine[0] > 0 Then $sMode = StringLower($CmdLine[1])
 
 ; --no-pause lets an unattended profile finish without waiting for a keypress.
-Global $g_bPause = True
 For $i = 1 To $CmdLine[0]
     If StringLower($CmdLine[$i]) = "--no-pause" Then
         $g_bPause = False

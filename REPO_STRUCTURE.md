@@ -276,6 +276,7 @@ AutoInstaller/
 │   ├── ventoy.169.json.example
 │   ├── ventoy.43.json.example
 │   └── ventoy.json.example
+├── .gitattributes
 ├── .gitignore
 ├── 5b512ee8a59deb284ad0a6a035ba10b1.md5
 ├── _installer_common.au3

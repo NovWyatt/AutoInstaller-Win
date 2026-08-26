@@ -23,9 +23,11 @@
       9. No tracked file is excluded by the .gitignore rules
 
     AutoIt cannot be installed on a CI runner, so check 4 stands in for the
-    compiler. It is not a parser: it verifies block balance, quote balance, and
-    that every _Name() call and Call("_Name") dispatch resolves against the file
-    or the library it includes. That covers what a blind edit actually breaks.
+    compiler. It is not a parser: it verifies block balance, quote balance, that
+    every _Name() call and Call("_Name") dispatch resolves against the file or
+    the library it includes, and that no Global is read before its declaration
+    runs -- including through a function that startup code calls too early,
+    which AutoIt accepts silently and which inverted a guard here once.
 
 .PARAMETER Path
     Repository root. Defaults to the parent of this script's folder.
@@ -124,6 +126,20 @@ function Test-Au3File {
     $defined = [System.Collections.Generic.HashSet[string]]::new()
     $called = [System.Collections.Generic.List[object]]::new()
 
+    # AutoIt creates a variable on first use unless MustDeclareVars is on, so a
+    # Global whose declaration sits below code that already reads it does not
+    # fail -- the early read just sees an empty value, which silently inverts a
+    # boolean guard. The read is usually not lexically above the Global either:
+    # it is inside a function that script-scope code calls too early. So track
+    # where each Global is declared, which functions read it, and where script
+    # scope calls those functions.
+    $globalDecl     = @{}   # $name -> line of its Global
+    $scriptUse      = @{}   # $name -> first script-scope line that reads it
+    $funcReads      = @{}   # func  -> set of $names it reads
+    $funcLocals     = @{}   # func  -> set of $names it declares locally
+    $scriptCalls    = [System.Collections.Generic.List[object]]::new()  # (line, func)
+    $currentFunc    = $null
+
     foreach ($entry in (Get-Au3LogicalLine $lines)) {
         $clean = Remove-Au3Noise $entry.Source
         if ($clean.Unterminated) { $problems.Add("line $($entry.Line): unbalanced quote") }
@@ -160,6 +176,45 @@ function Test-Au3File {
             }
         }
 
+        # "Script scope" means "not inside a Func" -- not "not inside a block".
+        # Startup code lives inside If blocks, and that is exactly where the
+        # too-early call sits.
+        if ($head -eq 'func' -and $s -match '(?i)^func\s+([A-Za-z0-9_]+)') {
+            $currentFunc = $Matches[1].ToLowerInvariant()
+            $funcReads[$currentFunc]  = [System.Collections.Generic.HashSet[string]]::new()
+            $funcLocals[$currentFunc] = [System.Collections.Generic.HashSet[string]]::new()
+            foreach ($m in [regex]::Matches($s, '(\$[A-Za-z0-9_]+)')) {
+                [void] $funcLocals[$currentFunc].Add($m.Groups[1].Value.ToLowerInvariant())
+            }
+        }
+        elseif ($head -eq 'endfunc') {
+            $currentFunc = $null
+        }
+        elseif ($null -eq $currentFunc) {
+            $declLine = $null
+            if ($s -match '(?i)^global\s+(const\s+)?(\$[A-Za-z0-9_]+)') {
+                $declared = $Matches[2].ToLowerInvariant()
+                if (-not $globalDecl.ContainsKey($declared)) { $globalDecl[$declared] = $entry.Line }
+                $declLine = $declared
+            }
+            foreach ($m in [regex]::Matches($s, '(\$[A-Za-z0-9_]+)')) {
+                $name = $m.Groups[1].Value.ToLowerInvariant()
+                if ($name -eq $declLine) { continue }
+                if (-not $scriptUse.ContainsKey($name)) { $scriptUse[$name] = $entry.Line }
+            }
+            foreach ($m in [regex]::Matches($s, '(?<![A-Za-z0-9_$@.])(_[A-Za-z0-9_]+)\s*\(')) {
+                $scriptCalls.Add(@($entry.Line, $m.Groups[1].Value.ToLowerInvariant()))
+            }
+        }
+        elseif ($currentFunc) {
+            if ($s -match '(?i)^\s*(local|const|dim)\s+(\$[A-Za-z0-9_]+)') {
+                [void] $funcLocals[$currentFunc].Add($Matches[2].ToLowerInvariant())
+            }
+            foreach ($m in [regex]::Matches($s, '(\$[A-Za-z0-9_]+)')) {
+                [void] $funcReads[$currentFunc].Add($m.Groups[1].Value.ToLowerInvariant())
+            }
+        }
+
         foreach ($m in [regex]::Matches($s, '(?<![A-Za-z0-9_$@.])(_[A-Za-z0-9_]+)\s*\(')) {
             $called.Add(@($entry.Line, $m.Groups[1].Value.ToLowerInvariant()))
         }
@@ -169,6 +224,28 @@ function Test-Au3File {
     }
 
     foreach ($open in $stack) { $problems.Add("line $($open[1]): unclosed $($open[0]) block") }
+
+    foreach ($name in $globalDecl.Keys) {
+        $declaredAt = $globalDecl[$name]
+
+        # read directly, above its own declaration
+        if ($scriptUse.ContainsKey($name) -and $scriptUse[$name] -lt $declaredAt) {
+            $problems.Add(("line {0}: {1} is read at script scope before its Global on line {2}" -f $scriptUse[$name], $name, $declaredAt))
+            continue
+        }
+
+        # or read by a function that script scope calls before the declaration
+        foreach ($call in $scriptCalls) {
+            if ($call[0] -ge $declaredAt) { continue }
+            $fn = $call[1]
+            if (-not $funcReads.ContainsKey($fn)) { continue }
+            if ($funcLocals[$fn].Contains($name)) { continue }   # shadowed locally
+            if ($funcReads[$fn].Contains($name)) {
+                $problems.Add(("line {0}: {1}() reads {2}, whose Global is only declared on line {3}" -f $call[0], $fn, $name, $declaredAt))
+                break
+            }
+        }
+    }
 
     $known = [System.Collections.Generic.HashSet[string]]::new($defined)
     if ($ExtraNames) { foreach ($n in $ExtraNames) { [void] $known.Add($n) } }
