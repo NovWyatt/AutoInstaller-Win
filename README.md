@@ -62,7 +62,7 @@ creates a local account without touching a Microsoft account.
 | `Auto-installer.exe` | Orchestrates the run and prints live progress |
 | `install-apps.exe` | Installs everything enabled in `install-apps.ini` |
 | `install-drivers.exe` | Snappy Driver Installer Origin, Windows Update as fallback |
-| `configure-windows.exe` | Applies the 29 settings in `configure-windows.ini` |
+| `configure-windows.exe` | Applies the settings in `configure-windows.ini` |
 | `report.exe` | Writes `C:\Auto-installer\report.md` |
 
 Each application has its own small installer under its category folder. They are
@@ -269,8 +269,11 @@ same script on every push.
 
 1. **Taskbar and Start menu pinning does nothing.** Windows 11 22H2 removed the
    shell's `taskbarpin` verb, which is how `configure-windows.ps1` pins and
-   unpins. Tasks 6, 7 and 12 cannot work as written; they need a layout XML
-   instead. Marked `[BUG]` in `configure-windows.ini`.
+   unpins. `InvokeVerb` still returns without error, it just has no effect, which
+   is why this looked like it worked. Tasks 6, 7 and 12 need a layout XML
+   instead. Marked `[BUG]` in `configure-windows.ini`. The run now counts the
+   pinned shortcuts before and after and logs an error when nothing moved, so
+   the report says so rather than staying quiet.
 2. **Downloading the setup files is manual and slow.** The plan is a
    `download_url` column in `install-apps.ini` and a `download-apps.ps1`. Not all
    vendors will cooperate — several gate downloads behind anti-bot checks.
@@ -280,9 +283,7 @@ same script on every push.
 4. **WinRAR's desktop shortcut sometimes does not appear.** The installer now
    logs the target path it resolved and why it gave up, so the next run should
    say what is actually happening.
-5. **Driver resume breaks if the USB is removed.** When Windows Update needs a
-   reboot, the scheduled continuation task points at the script on the USB.
-6. **The boot menu artwork still carries the upstream author's branding**, baked
+5. **The boot menu artwork still carries the upstream author's branding**, baked
    into the background images. See [ventoy/theme/README.md](ventoy/theme/README.md)
    for what to redraw.
 

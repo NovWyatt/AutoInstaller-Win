@@ -395,7 +395,17 @@ $unpinDefaults = Get-IniBool -Ini $iniConfig -Section 'taskbar' -Key 'unpin_defa
 $pinItems = Get-IniList -Ini $iniConfig -Section 'taskbar' -Key 'pins' -Default 'explorer, chrome, word, excel, powerpoint, zalo'
 
 $shell = New-Object -ComObject Shell.Application
-$taskbarFolder = $shell.NameSpace("$env:AppData\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar")
+$taskbarPinDir = "$env:AppData\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+$taskbarFolder = $shell.NameSpace($taskbarPinDir)
+
+# Windows 11 22H2 (build 22621) removed the shell's taskbarpin/taskbarunpin
+# verbs. InvokeVerb still returns without error there, it simply does nothing,
+# which is why this used to look like it worked and changed nothing. Count the
+# pinned shortcuts before and after so the log says what actually happened.
+$pinnedBefore = @(Get-ChildItem -LiteralPath $taskbarPinDir -Filter '*.lnk' -ErrorAction SilentlyContinue).Count
+if ($buildNumber -ge 22621) {
+    Write-Log "WARN: [6..7] Windows build $buildNumber no longer exposes the taskbarpin verb; taskbar pinning is expected to have no effect. See KNOWN ISSUES in README.md."
+}
 
 if ($unpinDefaults -and $taskbarFolder) {
     foreach ($item in $taskbarFolder.Items()) {
@@ -433,7 +443,12 @@ foreach ($pKey in $pinItems) {
         Write-Log "INFO: [7] Taskbar pin skipped (app not installed/not found): $pKey"
     }
 }
-Write-Log "INFO: [6..7] Taskbar pinning processed. Pinned $pinnedCount item(s)."
+$pinnedAfter = @(Get-ChildItem -LiteralPath $taskbarPinDir -Filter '*.lnk' -ErrorAction SilentlyContinue).Count
+if ($pinnedCount -gt 0 -and $pinnedAfter -eq $pinnedBefore) {
+    Write-Log "ERROR: [6..7] Taskbar pinning had no effect: asked for $pinnedCount pin(s), shortcut count stayed at $pinnedBefore. The shell accepted the verb and ignored it."
+} else {
+    Write-Log "INFO: [6..7] Taskbar pinning processed. Requested $pinnedCount pin(s); shortcuts went from $pinnedBefore to $pinnedAfter."
+}
 
 # ==============================================================================
 # 11, 12, 13, 22. Start Menu Configuration
@@ -674,8 +689,14 @@ try {
     Write-Log "INFO: Power screen timeout set (AC: 60m, DC: 15m)."
 } catch {}
 
-# Startup apps cleanup
-$allowedStartup = @('UnikeyNT.exe', 'SecurityHealthSystray.exe', 'UnikeyNT', 'SecurityHealthSystray')
+# 30. Startup apps cleanup
+# The allow-list is configuration, not code: it names the tray applications this
+# build wants running at logon. Matched as a case-insensitive substring of the
+# entry name or its command line, literally -- the previous version fed these
+# straight to -match, where a dot in "UnikeyNT.exe" was a wildcard.
+Write-Log "INFO: [30] Disabling startup applications outside the allow-list..."
+$allowedStartup = Get-IniList -Ini $iniConfig -Section 'system' -Key 'keep_startup' `
+                              -Default 'UniKeyNT, SecurityHealthSystray'
 $runKeys = @(
     'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 
     'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run',
@@ -703,14 +724,18 @@ for ($i = 0; $i -lt $runKeys.Count; $i++) {
                 $val = $prop.Value -as [string]
                 $isAllowed = $false
                 foreach ($a in $allowedStartup) {
-                    if ($val -match $a -or $name -match $a) { $isAllowed = $true; break }
+                    if ($val.IndexOf($a, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $name.IndexOf($a, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                        $isAllowed = $true
+                        break
+                    }
                 }
                 if (-not $isAllowed) {
                     if (-not (Test-Path -LiteralPath $startupApproved[$i])) {
                         $null = New-Item -Path $startupApproved[$i] -Force -ErrorAction SilentlyContinue
                     }
                     Set-ItemProperty -LiteralPath $startupApproved[$i] -Name $name -Value ([byte[]](0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)) -Type Binary -Force -ErrorAction SilentlyContinue
-                    Write-Log "INFO: Disabled startup application: $name"
+                    Write-Log "INFO: [30] Disabled startup application: $name"
                 }
             }
         }

@@ -133,6 +133,9 @@ function Invoke-SdioDriverInstallation {
         ('-logdir:"{0}"' -f $LogDir)
     )
 
+    # Anchor log parsing to this run. Without it, a second pass re-reads the
+    # logs the first pass left behind and counts those drivers all over again.
+    $runStartedAt = Get-Date
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $proc = Start-Process -FilePath $SdioPath -ArgumentList ($sdioArgs -join ' ') -WorkingDirectory $sdioDir -PassThru -Wait
     $sw.Stop()
@@ -142,7 +145,9 @@ function Invoke-SdioDriverInstallation {
 
     # Parse SDIO log files in $LogDir to extract individual driver items installed/failed
     $installedDrivers = [System.Collections.Generic.List[pscustomobject]]::new()
-    $sdioLogs = Get-ChildItem -Path $LogDir -Filter '*.log' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+    $sdioLogs = Get-ChildItem -Path $LogDir -Filter '*.log' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.LastWriteTime -ge $runStartedAt.AddMinutes(-1) } |
+                Sort-Object LastWriteTime -Descending
     foreach ($logFile in $sdioLogs) {
         $lines = Get-Content -LiteralPath $logFile.FullName -Encoding UTF8 -ErrorAction SilentlyContinue
         foreach ($line in $lines) {
@@ -223,8 +228,24 @@ function Set-WindowsUpdatePolicy {
 function Register-DriverResumeTask {
     param([string] $ScriptPath)
 
+    # The task runs after a reboot, by which point the USB may be unplugged or
+    # may have taken a different drive letter -- either way a task pointing at
+    # the stick fails silently and the driver phase never resumes. Run from a
+    # copy on the system drive instead, falling back to the original if the copy
+    # cannot be made.
+    $resumePath = Join-Path $logDirectory 'install-drivers.ps1'
+    try {
+        New-Item -ItemType Directory -Path $logDirectory -Force -ErrorAction SilentlyContinue | Out-Null
+        Copy-Item -LiteralPath $ScriptPath -Destination $resumePath -Force -ErrorAction Stop
+        Write-DriverLog INFO "[DRIVER] status=resume-staged; detail=continuation will run from $resumePath"
+    }
+    catch {
+        Write-DriverLog WARN "[DRIVER] status=resume-stage-failed; detail=could not copy the script to $logDirectory ($($_.Exception.Message)); the task will point at $ScriptPath and will fail if that path goes away"
+        $resumePath = $ScriptPath
+    }
+
     $arguments = @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $ScriptPath),
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $resumePath),
         '-MaxIteration', $MaxIteration,
         '-Iteration', ($Iteration + 1)
     )

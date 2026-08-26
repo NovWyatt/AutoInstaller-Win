@@ -238,14 +238,12 @@ $RootDir = (Resolve-Path -LiteralPath $RootDir).Path
 # ------------------------------------------------------------------------------
 # 4. Compiler Auto-Detection
 # ------------------------------------------------------------------------------
+# Environment-derived paths only; a hardcoded D:\ entry used to sit at the top of
+# this list and was specific to one machine. Pass -CompilerPath for anything else.
 $candidateCompilers = @(
     $CompilerPath,
-    'D:\Program Files (x86)\AutoIt3\Aut2Exe\Aut2exe_x64.exe',
-    'C:\Program Files (x86)\AutoIt3\Aut2Exe\Aut2exe_x64.exe',
     "${env:ProgramFiles(x86)}\AutoIt3\Aut2Exe\Aut2exe_x64.exe",
     "${env:ProgramFiles}\AutoIt3\Aut2Exe\Aut2exe_x64.exe",
-    'D:\Program Files (x86)\AutoIt3\Aut2Exe\Aut2exe.exe',
-    'C:\Program Files (x86)\AutoIt3\Aut2Exe\Aut2exe.exe',
     "${env:ProgramFiles(x86)}\AutoIt3\Aut2Exe\Aut2exe.exe",
     "${env:ProgramFiles}\AutoIt3\Aut2Exe\Aut2exe.exe"
 ) | Where-Object { [string]::IsNullOrWhiteSpace($_) -eq $false }
@@ -462,8 +460,11 @@ foreach ($task in $compilationTasks) {
         Write-Host ("    Command: & `"$foundCompiler`" $argList") -ForegroundColor DarkGray
     }
 
+    # Aut2Exe reports success even when it produced nothing, so a stale .exe from
+    # an earlier build would otherwise pass. Compare write times, not existence.
+    $startedAt = Get-Date
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    
+
     if ($Log) {
         $procInfo = New-Object System.Diagnostics.ProcessStartInfo
         $procInfo.FileName = $foundCompiler
@@ -495,7 +496,9 @@ foreach ($task in $compilationTasks) {
         $exitCode = $proc.ExitCode
     }
 
-    if ($exitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
+    $produced = (Test-Path -LiteralPath $out) -and
+                ((Get-Item -LiteralPath $out).LastWriteTime -ge $startedAt.AddSeconds(-2))
+    if ($exitCode -eq 0 -and $produced) {
         Write-Host ("  [SUCCESS] {0} -> {1} ({2} ms)" -f $relSrc, $relOut, $sw.ElapsedMilliseconds) -ForegroundColor Green
         
         # Mirror master installer if install-apps.au3 is compiled
@@ -517,11 +520,14 @@ foreach ($task in $compilationTasks) {
         }
         $successCount++
     } else {
-        Write-Host ("  [FAILED]  {0} (ExitCode: {1})" -f $relSrc, $exitCode) -ForegroundColor Red
+        $why = if ($exitCode -ne 0) { "ExitCode: $exitCode" }
+               elseif (Test-Path -LiteralPath $out) { 'compiler reported success but did not rewrite the output' }
+               else { 'compiler reported success but produced no output' }
+        Write-Host ("  [FAILED]  {0} ({1})" -f $relSrc, $why) -ForegroundColor Red
         $results += [PSCustomObject]@{
             Source  = $relSrc
             Output  = $relOut
-            Status  = "FAILED ($exitCode)"
+            Status  = "FAILED ($why)"
             TimeMs  = $sw.ElapsedMilliseconds
         }
         $failCount++

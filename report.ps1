@@ -152,6 +152,9 @@ try {
     # --------------------------------------------------------------------------
     # 3. Parse Windows Configuration Status
     # --------------------------------------------------------------------------
+    # Task numbers come from the log lines configure-windows.ps1 emits, so the
+    # report follows configure-windows.ini instead of a number baked in here.
+    $configTaskNumbers = [System.Collections.Generic.HashSet[int]]::new()
     $configStatus = 'not-run'
     $configDetails = [System.Collections.Generic.List[pscustomobject]]::new()
     $validations   = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -159,10 +162,24 @@ try {
     if ($configLines.Count -gt 0) {
         $configStatus = 'completed'
         foreach ($line in $configLines) {
-            if ($line -match 'INFO: \[(?<num>\d+(\.\.\d+)?)\] (?<desc>.*)') {
+            # configure-windows.ps1 labels its lines "[5]", "[1..3]" or
+            # "[14..19, 23, 26, 27]"; expand whichever form appears.
+            if ($line -match 'INFO: \[(?<spec>[\d,\.\s]+)\]\s*(?<desc>.*)') {
+                $spec = $Matches.spec
+                $desc = $Matches.desc
+                foreach ($part in ($spec -split ',')) {
+                    if ($part -match '^\s*(\d+)\s*\.\.\s*(\d+)\s*$') {
+                        [int] $rangeStart = $Matches[1]
+                        [int] $rangeEnd   = $Matches[2]
+                        for ($t = $rangeStart; $t -le $rangeEnd; $t++) { [void] $configTaskNumbers.Add($t) }
+                    }
+                    elseif ($part -match '^\s*(\d+)\s*$') {
+                        [void] $configTaskNumbers.Add([int] $Matches[1])
+                    }
+                }
                 $configDetails.Add([pscustomobject]@{
-                    Section     = "Task #$($Matches.num)"
-                    Description = $Matches.desc
+                    Section     = "Task #$($spec.Trim())"
+                    Description = $desc
                 })
             }
             if ($line -match '\[VALIDATION\] (?<result>PASS|FAIL): (?<item>.*)') {
@@ -238,7 +255,7 @@ try {
     Add-Line '| :--- | :--- | :--- |'
     Add-Line ('| **Unattended Setup Scripts** | `{0}` | Embedded specialize & debloat scripts |' -f @((Escape-MarkdownTableValue $setupStatus)))
     Add-Line ('| **Applications Installation** | `{0} Installed` | {1} installed, {2} existing, {3} disabled, {4} failed |' -f @($installedCount, $installedCount, $alreadyInstalledCount, $disabledCount, $failedCount))
-    Add-Line ('| **Windows Configuration** | `{0}` | 29 post-installation features applied |' -f @((Escape-MarkdownTableValue $configStatus)))
+    Add-Line ('| **Windows Configuration** | `{0}` | {1} post-installation task(s) applied |' -f @((Escape-MarkdownTableValue $configStatus), $configTaskNumbers.Count))
     Add-Line ('| **Driver Updates** | `{0}` | {1} |' -f @((Escape-MarkdownTableValue $driverStatus), (Escape-MarkdownTableValue $driverDetail)))
     Add-Line ('| **Total Logged Errors** | `{0}` | Critical system/script errors |' -f @($errorLines.Count))
     Add-Line ('| **Total Logged Warnings** | `{0}` | Minor warnings / skipped items |' -f @($warnLines.Count))
@@ -280,7 +297,7 @@ try {
     Add-Line ''
 
     # --- Windows Configuration ---
-    Add-Line '## 4. Windows Post-Installation Configuration (29 Features)'
+    Add-Line ('## 4. Windows Post-Installation Configuration ({0} Task(s))' -f $configTaskNumbers.Count)
     Add-Line ''
     if ($validations.Count -gt 0) {
         Add-Line '### Configuration Assertions & Validation'

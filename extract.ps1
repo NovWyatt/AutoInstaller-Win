@@ -729,12 +729,16 @@ foreach ($folder in $appFolders) {
     }
 }
 
-# Root files to copy: *.ps1 (excluding extract.ps1), *.exe, *.ico, *.png, *.ini, and marker md5
+# Root files to copy: *.exe, *.ico, *.png, *.ini and the runtime *.ps1, plus the
+# marker md5. Build tooling is deliberately left behind -- it only runs on the
+# workstation, and shipping it would put a deployment script on every machine
+# this USB installs.
 $rootExtensions = @('*.exe', '*.ico', '*.png', '*.ini', '*.ps1')
+$excludedFromUsb = @('extract.ps1', 'compile-au2exe.ps1')
 $rootFiles = @()
 foreach ($ext in $rootExtensions) {
     $rootFiles += Get-ChildItem -Path $RootDir -Filter $ext -File -Force -ErrorAction SilentlyContinue |
-                  Where-Object { $_.Name -ne 'extract.ps1' }
+                  Where-Object { $excludedFromUsb -notcontains $_.Name }
 }
 
 # Include software marker md5
