@@ -53,6 +53,20 @@ ISO/
 └── 5b512ee8a59deb284ad0a6a035ba10b1.md5
 ```
 
+> **The twelve answer files are generated, not hand-written.** They differ along
+> only two axes -- disk layout (`C` / `C_D` / `dyn_C_D` / `mandisk`) and scope
+> (`full` / `noapps` / `nodrivers`) -- and are otherwise identical, embedded
+> setup scripts included. Edit `template/unattend.template.xml` (shared content)
+> or `template/disk-<layout>.xml` (partitioning), then run:
+>
+> ``` powershell
+> .uild-unattend.ps1
+> ```
+>
+> The generated files stay committed, so deploying the USB never requires running
+> the build. `.uild-unattend.ps1 -Check` verifies the committed files still
+> match the template and is what CI runs.
+
 **2. MODIFY `ventoy.json` FILE**
 
 Modify `"auto_install"` block in `ventoy.json` file to use these scripts.

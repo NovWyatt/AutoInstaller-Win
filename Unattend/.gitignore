@@ -5,3 +5,6 @@
 !/.gitignore
 !/README.md
 !/*.xml
+!/build-unattend.ps1
+!/template/
+!/template/**

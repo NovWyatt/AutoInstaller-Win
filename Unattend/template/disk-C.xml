@@ -1,0 +1,43 @@
+			<DiskConfiguration>
+				<Disk wcm:action="add">
+					<DiskID>$$VT_WINDOWS_DISK_1ST_NONVTOY$$</DiskID>
+					<WillWipeDisk>true</WillWipeDisk>
+					<CreatePartitions>
+						<CreatePartition wcm:action="add">
+							<Order>1</Order>
+							<Type>EFI</Type>
+							<Size>100</Size>
+						</CreatePartition>
+						<CreatePartition wcm:action="add">
+							<Order>2</Order>
+							<Type>MSR</Type>
+							<Size>16</Size>
+						</CreatePartition>
+						<CreatePartition wcm:action="add">
+							<Order>3</Order>
+							<Type>Primary</Type>
+							<Extend>true</Extend>
+						</CreatePartition>
+					</CreatePartitions>
+					<ModifyPartitions>
+						<ModifyPartition wcm:action="add">
+							<Order>1</Order>
+							<PartitionID>1</PartitionID>
+							<Label>System</Label>
+							<Format>FAT32</Format>
+						</ModifyPartition>
+						<ModifyPartition wcm:action="add">
+							<Order>2</Order>
+							<PartitionID>2</PartitionID>
+						</ModifyPartition>
+						<ModifyPartition wcm:action="add">
+							<Order>3</Order>
+							<PartitionID>3</PartitionID>
+							<Label>Windows</Label>
+							<Letter>C</Letter>
+							<Format>NTFS</Format>
+						</ModifyPartition>
+					</ModifyPartitions>
+				</Disk>
+				<WillShowUI>OnError</WillShowUI>
+			</DiskConfiguration>
