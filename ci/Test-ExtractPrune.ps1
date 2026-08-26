@@ -74,10 +74,12 @@ function Reset-Lab {
     Set-Content "$lab\Windows\win11.iso"                      'USER ISO'     -Encoding ascii
 }
 
+# Entries are stored relative to the partition root so a change of drive
+# letter cannot silently disable pruning, or point it at another disk.
 function Write-Manifest {
-    param([string[]] $Paths)
+    param([string[]] $RelativePaths)
     Set-Content -LiteralPath (Join-Path "$lab\" $manifestName) `
-                -Value (@('# manifest') + ($Paths | ForEach-Object { [System.IO.Path]::GetFullPath($_) })) `
+                -Value (@('# manifest') + $RelativePaths) `
                 -Encoding UTF8
 }
 
@@ -91,9 +93,9 @@ try {
     # === the repository dropped two files since the last deployment ===========
     Reset-Lab
     Write-Manifest @(
-        "$lab\Browsers\install_chrome-standalone.exe",
-        "$lab\ventoy\theme\oldname\theme.txt",
-        "$lab\update_logs.ps1")
+        'Browsers\install_chrome-standalone.exe',
+        'ventoy\theme\oldname\theme.txt',
+        'update_logs.ps1')
     New-DeploySet @("$lab\Browsers\install_chrome-standalone.exe")
     Invoke-StalePrune -PartitionRoot $lab -Label 'test' | Out-Null
 
@@ -114,19 +116,22 @@ try {
     Reset-Lab
     $outside = Join-Path ([System.IO.Path]::GetTempPath()) 'autoinstaller-prunetest-outside.txt'
     Set-Content $outside 'must not be touched' -Encoding ascii
+    # Both entries are absolute, which is the older manifest format: the one
+    # outside the partition must never be touched, and the one inside is
+    # ignored too rather than trusted on a possibly different disk.
     Set-Content -LiteralPath (Join-Path "$lab\" $manifestName) `
                 -Value @('# manifest', [System.IO.Path]::GetFullPath($outside), [System.IO.Path]::GetFullPath("$lab\update_logs.ps1")) `
                 -Encoding UTF8
     New-DeploySet @()
     Invoke-StalePrune -PartitionRoot $lab -Label 'test' | Out-Null
 
-    Assert 'path outside the partition is ignored' (Test-Path $outside)
-    Assert 'path inside the partition is removed'  (-not (Test-Path "$lab\update_logs.ps1"))
+    Assert 'legacy manifest: outside path untouched' (Test-Path $outside)
+    Assert 'legacy manifest: inside path untouched'  (Test-Path "$lab\update_logs.ps1")
     Remove-Item $outside -Force -ErrorAction SilentlyContinue
 
     # === dry run must not delete ==============================================
     Reset-Lab
-    Write-Manifest @("$lab\update_logs.ps1")
+    Write-Manifest @('update_logs.ps1')
     New-DeploySet @()
     $DryRun = $true
     Invoke-StalePrune -PartitionRoot $lab -Label 'test' | Out-Null

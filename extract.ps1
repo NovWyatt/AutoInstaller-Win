@@ -537,6 +537,11 @@ function Copy-DeployDirectory {
 
     if ($DryRun) {
         $sw.Stop()
+        # Register even when simulating: otherwise the prune preview below sees an
+        # empty plan and announces that everything this run redeploys is stale.
+        foreach ($f in (Get-ChildItem -LiteralPath $SourceDir -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            Register-DeployedFile (Join-Path $DestinationDir $f.FullName.Substring($SourceDir.Length).TrimStart('\', '/'))
+        }
         Write-Host ("  [DRY-RUN] Directory: {0} -> {1}" -f $SourceDir, $DestinationDir) -ForegroundColor Cyan
         Write-ExtractLog DRY-RUN "Copy directory: '$SourceDir' -> '$DestinationDir'"
         $script:taskResults.Add([pscustomobject]@{
@@ -606,6 +611,7 @@ function Copy-DeployFiles {
 
     if ($DryRun) {
         $sw.Stop()
+        foreach ($file in $matchingFiles) { Register-DeployedFile (Join-Path $DestinationDir $file.Name) }
         Write-Host ("  [DRY-RUN] Files ({0} items): {1} -> {2}" -f $matchingFiles.Count, $SourcePattern, $DestinationDir) -ForegroundColor Cyan
         Write-ExtractLog DRY-RUN "Copy $($matchingFiles.Count) file(s) matching '$SourcePattern' to '$DestinationDir'"
         $script:taskResults.Add([pscustomobject]@{
@@ -664,6 +670,7 @@ $dstExampleJson = Join-Path $ventoyDst 'ventoy.json.example'
 $dstVentoyJson  = Join-Path $ventoyDst 'ventoy.json'
 
 if ($DryRun) {
+    Register-DeployedFile $dstVentoyJson
     Write-Host ("  [DRY-RUN] Config Rename: {0}\ventoy.json.example -> {0}\ventoy.json" -f $ventoyDst) -ForegroundColor Cyan
     Write-ExtractLog DRY-RUN "Simulated renaming of 'ventoy.json.example' to 'ventoy.json' in '$ventoyDst'."
 } else {
@@ -779,6 +786,7 @@ if ($rootFiles.Count -gt 0) {
     
     if ($DryRun) {
         $rootFilesSw.Stop()
+        foreach ($rf in $rootFiles) { Register-DeployedFile (Join-Path $softwareRoot $rf.Name) }
         Write-Host ("  [DRY-RUN] Root Assets ({0} file(s)) -> {1}\" -f $rootFiles.Count, $softwareRoot) -ForegroundColor Cyan
         Write-ExtractLog DRY-RUN "Copy $($rootFiles.Count) root asset file(s) to '$softwareRoot\'"
         $script:taskResults.Add([pscustomobject]@{
@@ -838,13 +846,23 @@ function Invoke-StalePrune {
 
     $manifestPath = Join-Path "$PartitionRoot\" $manifestName
 
+    $rootFull = [System.IO.Path]::GetFullPath("$PartitionRoot\")
+
+    # Entries are stored relative to the partition root. Absolute paths would
+    # stop matching the moment the stick came back as a different drive letter,
+    # which silently disables pruning -- or, worse, could name a path on another
+    # disk entirely. A rooted line is from the older format and is ignored.
     $previous = @()
     if (Test-Path -LiteralPath $manifestPath) {
-        $previous = @(Get-Content -LiteralPath $manifestPath -Encoding UTF8 -ErrorAction SilentlyContinue |
-                      Where-Object { $_ -and -not $_.StartsWith('#') })
+        foreach ($line in (Get-Content -LiteralPath $manifestPath -Encoding UTF8 -ErrorAction SilentlyContinue)) {
+            if (-not $line -or $line.StartsWith('#')) { continue }
+            if ([System.IO.Path]::IsPathRooted($line)) {
+                Write-ExtractLog WARN "Ignoring absolute manifest entry '$line' on $Label (older format)."
+                continue
+            }
+            $previous += [System.IO.Path]::Combine($rootFull, $line)
+        }
     }
-
-    $rootFull = [System.IO.Path]::GetFullPath("$PartitionRoot\")
     $stale = @($previous | Where-Object {
         $_ -and
         -not $script:DeployedFiles.Contains($_) -and
@@ -899,6 +917,7 @@ function Invoke-StalePrune {
             "# $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         ) + @($script:DeployedFiles |
               Where-Object { $_.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) } |
+              ForEach-Object { $_.Substring($rootFull.Length) } |
               Sort-Object)
         try {
             Set-Content -LiteralPath $manifestPath -Value $lines -Encoding UTF8 -ErrorAction Stop
